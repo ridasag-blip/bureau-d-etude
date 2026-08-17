@@ -1,0 +1,145 @@
+"use client";
+export const dynamic = "force-dynamic";
+
+import { useEffect, useState } from "react";
+import Navbar from "@/components/Navbar";
+import FilterBar from "@/components/FilterBar";
+import SelectionPersonne from "@/components/SelectionPersonne";
+import HorlogeDigitale from "@/components/HorlogeDigitale";
+import { useAppData, appliquerFiltres, FILTRES_INITIAUX } from "@/lib/useAppData";
+import { useValidateurActif } from "@/lib/useValidateurActif";
+import { grouperParIngenieur, calculerStatsIngenieur } from "@/lib/scoring";
+
+export default function StatistiquesPage() {
+  const { profile, erreurProfil, options, loading, supabase } = useAppData();
+  const { nom: nomSelectionne, pret: pretPersonne, selectionner, changerDePersonne, validateurs } =
+    useValidateurActif(profile, supabase);
+  const estAdmin = profile?.role === "admin";
+  const nomActif = estAdmin ? profile?.nom_complet : nomSelectionne;
+  const [dossiers, setDossiers] = useState([]);
+  const [objectifs, setObjectifs] = useState({});
+  const [filtres, setFiltres] = useState(FILTRES_INITIAUX);
+
+  useEffect(() => {
+    if (!profile) return;
+    (async () => {
+      const [{ data: doss }, { data: objs }] = await Promise.all([
+        supabase.from("dossiers").select("*").limit(5000),
+        supabase.from("objectifs").select("*"),
+      ]);
+      setDossiers(doss || []);
+      const map = {};
+      (objs || []).forEach((o) => (map[o.ingenieur] = o));
+      setObjectifs(map);
+    })();
+  }, [profile]);
+
+  if (erreurProfil) {
+    return (
+      <div className="p-10 max-w-lg mx-auto text-center">
+        <p className="text-isoRed font-medium mb-2">Profil introuvable</p>
+        <p className="text-sm text-ink/60">{erreurProfil}</p>
+      </div>
+    );
+  }
+  if (loading || !profile) return <div className="p-10 text-center text-ink/40">Chargement…</div>;
+  if (!estAdmin && !pretPersonne) return <div className="p-10 text-center text-ink/40">Chargement…</div>;
+
+  if (!estAdmin && !nomActif) {
+    return <SelectionPersonne personnes={validateurs} onSelection={selectionner} />;
+  }
+
+  const filtres_ = appliquerFiltres(dossiers, filtres);
+  const parIngenieur = grouperParIngenieur(filtres_);
+  const lignes = Object.entries(parIngenieur).map(([ingenieur, dossiersIng]) => ({
+    ingenieur,
+    stats: calculerStatsIngenieur(dossiersIng, objectifs[ingenieur]),
+  }));
+
+  return (
+    <div>
+      <Navbar role={profile.role} nom={nomActif} onChangerPersonne={estAdmin ? undefined : changerDePersonne} />
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        <div className="flex justify-between items-baseline mb-1">
+          <h1 className="font-display text-2xl font-bold">Statistiques</h1>
+          <HorlogeDigitale />
+        </div>
+        <p className="text-ink/50 mb-6">Qualité et suivi (Q) par ingénieur.</p>
+
+        <FilterBar filtres={filtres} setFiltres={setFiltres} options={options} />
+
+        <div className="card overflow-x-auto mb-8">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-ink/50 uppercase border-b">
+                <th className="px-3 py-2">Ingénieur</th>
+                <th className="px-3 py-2">Objectif</th>
+                <th className="px-3 py-2">Nv. dossier</th>
+                <th className="px-3 py-2">Modif.</th>
+                <th className="px-3 py-2">Total traité</th>
+                <th className="px-3 py-2">Atteinte</th>
+                <th className="px-3 py-2">Retour int.</th>
+                <th className="px-3 py-2">Retour client</th>
+                <th className="px-3 py-2">Délai moy.</th>
+                <th className="px-3 py-2">Score Qualité</th>
+                <th className="px-3 py-2">Score Product.</th>
+                <th className="px-3 py-2">Score Global</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lignes.map(({ ingenieur, stats }) => (
+                <tr key={ingenieur} className="border-b last:border-0">
+                  <td className="px-3 py-2 font-medium">{ingenieur}</td>
+                  <td className="px-3 py-2 text-ink/50">
+                    {objectifs[ingenieur]
+                      ? `${objectifs[ingenieur].objectif_nv_dossier}/${objectifs[ingenieur].objectif_modif}`
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2">{stats.nvDossierTraite}</td>
+                  <td className="px-3 py-2">{stats.modifTraite}</td>
+                  <td className="px-3 py-2">{stats.dossierTraiteTotal}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`badge ${
+                        stats.statutAtteinte === "Atteint"
+                          ? "bg-isoGreen/10 text-isoGreen"
+                          : stats.statutAtteinte === "Partiellement atteint"
+                          ? "bg-isoGold/10 text-isoGold"
+                          : stats.statutAtteinte === "Non atteint"
+                          ? "bg-isoRed/10 text-isoRed"
+                          : "bg-black/5 text-ink/40"
+                      }`}
+                    >
+                      {stats.statutAtteinte}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">{stats.nbRetourInterne}</td>
+                  <td className="px-3 py-2">{stats.nbRetourClient}</td>
+                  <td className="px-3 py-2">
+                    {stats.delaiMoyenJours !== null ? `${stats.delaiMoyenJours.toFixed(1)} j` : "—"}
+                  </td>
+                  <td className="px-3 py-2 font-semibold">
+                    {stats.scoreQualite !== null ? stats.scoreQualite.toFixed(0) : "—"}
+                  </td>
+                  <td className="px-3 py-2 font-semibold">
+                    {stats.scoreProductivite !== null ? stats.scoreProductivite : "—"}
+                  </td>
+                  <td className="px-3 py-2 font-display font-bold text-isoGreen">
+                    {stats.scoreGlobal !== null ? stats.scoreGlobal.toFixed(0) : "—"}
+                  </td>
+                </tr>
+              ))}
+              {lignes.length === 0 && (
+                <tr>
+                  <td colSpan={12} className="px-3 py-8 text-center text-ink/40">
+                    Aucune donnée pour ces filtres.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  );
+}
