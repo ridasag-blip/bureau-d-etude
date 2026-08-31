@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+:root {
+  --iso-green: #3CD64A;
+  --iso-green-dark: #2BAE3A;
+  --iso-red: #FF2D3A;
+  --iso-gold: #FFB800;
+  --iso-navy: #0E8FE0;
+}
+
+body {
+  background: linear-gradient(160deg, #EAF7ED 0%, #F7FBF5 35%, #F7F8F5 100%);
+  background-attachment: fixed;
+  color: #16211B;
+  font-family: 'Inter', sans-serif;
+}
+
+h1, h2, h3, .font-display {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.card {
+  background: white;
+  border-radius: 18px;
+  border: 1px solid rgba(22,33,27,0.07);
+  box-shadow: 0 1px 2px rgba(22,33,27,0.05), 0 8px 24px rgba(22,33,27,0.05);
+}
+
+.btn-primary {
+  background: var(--iso-green);
+  color: white;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 999px;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.btn-primary:hover {
+  background: var(--iso-green-dark);
+}
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background: white;
+  color: var(--iso-navy);
+  border: 1px solid rgba(22,33,27,0.15);
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 999px;
+}
+
+input, select, textarea {
+  border-radius: 12px !important;
+}
+
+:focus-visible {
+  outline: 2px solid var(--iso-gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
