@@ -12,6 +12,7 @@ import { StatutDossier } from "@/components/DossierTable";
 import PageHeader, { SectionTitle } from "@/components/ui/PageHeader";
 import StatutBadge from "@/components/ui/StatutBadge";
 import Icon from "@/components/ui/Icon";
+import Modal from "@/components/ui/Modal";
 import EmptyState from "@/components/ui/EmptyState";
 import UndoToast from "@/components/ui/UndoToast";
 import { EcranChargement, EcranErreurProfil } from "@/components/ui/Screens";
@@ -55,6 +56,7 @@ export default function MesDossiersPage() {
   const selectionner = choix.selectionner;
   const changerDePersonne = estAdmin ? choix.changerDePersonne : undefined;
   const [ingenieursAvecPin, setIngenieursAvecPin] = useState([]);
+  const [aModifier, setAModifier] = useState(null); // dossier envoyé au contrôle, encore modifiable
   const [dossiers, setDossiers] = useState([]);
   const [objectifsJour, setObjectifsJour] = useState([]);
   const [dossiersEquipeAujourdHui, setDossiersEquipeAujourdHui] = useState([]);
@@ -251,6 +253,42 @@ export default function MesDossiersPage() {
     chargerDossiers();
     return null;
   }
+  // Envoyé au contrôle mais pas encore pris par la Qualité : l'ingénieur peut encore le modifier ou le récupérer
+  const modifiable = (d) => d.etat === S.A_CONTROLER && !d.pris_en_charge_par;
+
+  async function encoreModifiable(d) {
+    const { data } = await supabase.from("dossiers").select("etat, pris_en_charge_par").eq("id", d.id).maybeSingle();
+    return data && modifiable(data);
+  }
+
+  async function majApresEnvoi(d, champs) {
+    if (!(await encoreModifiable(d))) {
+      chargerDossiers();
+      return "La Qualité a déjà pris ce dossier en contrôle : il n'est plus modifiable.";
+    }
+    return majBeneficiaire(d, champs);
+  }
+
+  async function recuperer(d) {
+    if (enCours) return alert("Termine d'abord ton dossier en cours.");
+    const { data, error } = await supabase
+      .from("dossiers")
+      .update({ etat: S.EN_COURS, date_soumission: null })
+      .eq("id", d.id)
+      .eq("etat", S.A_CONTROLER)
+      .is("pris_en_charge_par", null)
+      .select("id");
+    if (error) return alert("Action impossible : " + error.message);
+    if (!data?.length) {
+      chargerDossiers();
+      return alert("La Qualité a déjà pris ce dossier en contrôle : il ne peut plus être récupéré.");
+    }
+    const evt = await enregistrerEvenement(supabase, d.id, "reprise", { nom, cause: "Récupéré avant contrôle" });
+    memoriser(d, "Dossier récupéré", evt);
+    setAModifier(null);
+    chargerDossiers();
+  }
+
   const attenteInfo = dossiers.filter((d) => d.etat === S.ATTENTE_INFO);
   const auControle = dossiers.filter((d) => [S.A_CONTROLER, "En cours de vérification"].includes(d.etat));
   const traites = dossiers.filter((d) => [S.VALIDE, "Dossier vérifié"].includes(d.etat));
@@ -484,7 +522,26 @@ export default function MesDossiersPage() {
             {auControle.length > 0 && (
               <section className="mb-8">
                 <SectionTitle icone="shield" titre="Envoyés au contrôle" compteur={auControle.length} ton="gold" />
-                {listeSimple(auControle)}
+                {listeSimple(auControle, (d) =>
+                  modifiable(d) ? (
+                    <>
+                      <span className="text-xs text-ink/45">Pas encore pris par la Qualité</span>
+                      <button className="btn-secondary btn-sm" onClick={() => setAModifier(d)}>
+                        <Icon name="pencil" size={13} />
+                        Modifier
+                      </button>
+                      <button className="btn-secondary btn-sm" onClick={() => recuperer(d)} disabled={!!enCours} title={enCours ? "Termine d'abord ton dossier en cours" : "Le remettre en cours chez toi"}>
+                        <Icon name="undo" size={13} />
+                        Récupérer
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs text-ink/45">Pris en contrôle{d.pris_en_charge_par ? ` par ${d.pris_en_charge_par}` : ""}</span>
+                      <StatutDossier dossier={d} />
+                    </>
+                  )
+                )}
               </section>
             )}
 
@@ -577,8 +634,44 @@ export default function MesDossiersPage() {
         <HistoriqueComplet supabase={supabase} dossier={dossierHistorique} onFermer={() => setDossierHistorique(null)} />
       )}
 
+      {aModifier && (
+        <Modal titre={`Modifier ${aModifier.nom_dossier}`} sousTitre="Dossier envoyé au contrôle, pas encore pris par la Qualité" onFermer={() => setAModifier(null)} taille="lg">
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="eyebrow mb-2">Bénéficiaire</p>
+              <FicheBeneficiaire key={"m" + aModifier.id} dossier={aModifier} onSave={(c) => majApresEnvoi(aModifier, c)} compact />
+            </div>
+            <div>
+              <p className="eyebrow mb-2">Pièces du dossier</p>
+              <FichiersDossier
+                key={"mf" + aModifier.id}
+                supabase={supabase}
+                dossier={aModifier}
+                auteur={nom}
+                peutDeposerPieces={false}
+                peutDeposerLivrables
+                peutSupprimer={false}
+                compact
+              />
+            </div>
+            <p className="text-xs text-ink/50">
+              Pour corriger plus en profondeur, utilise « Récupérer » : le dossier repasse en cours chez toi, puis renvoie-le au contrôle.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => recuperer(aModifier)} disabled={!!enCours}>
+                <Icon name="undo" size={14} />
+                Récupérer
+              </button>
+              <button className="btn-primary" onClick={() => setAModifier(null)}>
+                Terminé
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {derniereAction && (
-        <UndoToast message={`${derniereAction.libelle} — « ${derniereAction.nomDossier} »`} onAnnuler={annulerDerniereAction} />
+      <UndoToast message={`${derniereAction.libelle} — « ${derniereAction.nomDossier} »`} onAnnuler={annulerDerniereAction} />
       )}
     </div>
   );

@@ -63,6 +63,7 @@ export default function QualitePage() {
   const [exportEnCours, setExportEnCours] = useState(false);
   // Admin : « Audité par » doit être un nom de la liste des validateurs (contrainte en base)
   const [auditeurAdmin, setAuditeurAdmin] = useState("");
+  const [choixAudit, setChoixAudit] = useState({}); // « Audité par » choisi par l'admin, dossier par dossier
   useEffect(() => {
     try {
       setAuditeurAdmin(localStorage.getItem("hillsolution_auditeur_admin") || "");
@@ -172,11 +173,23 @@ export default function QualitePage() {
   }
 
   const nomsValidateurs = (validateurs || []).map((v) => v.nom);
-  // « Audité par » doit figurer dans la liste du service Qualité (contrainte en base)
-  const auditeur = nomsValidateurs.includes(nomActif) ? nomActif : nomsValidateurs.includes(auditeurAdmin) ? auditeurAdmin : "";
+  const dansListe = (n) => !!n && nomsValidateurs.some((v) => v.toLowerCase() === String(n).trim().toLowerCase());
+  const graphie = (n) => nomsValidateurs.find((v) => v.toLowerCase() === String(n).trim().toLowerCase()) || String(n || "").trim();
+  // Le compte connecté est-il lui-même un membre de la Qualité ? (sinon on demande « Audité par »)
+  const qualiteConnecte = profile?.role === "qualite" && !!nomActif;
+  // « Audité par » proposé : la personne connectée (Qualité), sinon le choix de l'admin, sinon celui qui a le dossier en contrôle
+  const auditeurPour = (d) => (qualiteConnecte ? graphie(nomActif) : choixAudit[d?.id] || d?.pris_en_charge_par || auditeurAdmin || "");
+  const choixAuditeurs = (d) =>
+    [...new Set([...nomsValidateurs, d?.pris_en_charge_par, auditeurAdmin].filter(Boolean).map((n) => graphie(n)))].sort((a, b) => a.localeCompare(b));
 
-  function valider(d) {
-    if (!auditeur) return alert("Choisis d'abord « Audité par » (nom dans la liste du service Qualité).");
+  async function valider(d) {
+    const auditeur = auditeurPour(d);
+    if (!auditeur) return alert("Choisis d'abord « Audité par ».");
+    // « Audité par » doit exister dans la liste du service Qualité (contrainte en base) : on l'ajoute si besoin
+    if (!dansListe(auditeur)) {
+      const { error } = await supabase.rpc("fn_import_referentiels_v2", { p_validateurs: [auditeur] });
+      if (error) return alert(`« ${auditeur} » n'est pas dans la liste Service qualité (Paramètres → Listes) et n'a pas pu y être ajouté : ${error.message}`);
+    }
     return appliquer(
       d,
       { etat: S.VALIDE, date_verification: new Date().toISOString(), valide_par: auditeur, a_corriger: false },
@@ -317,6 +330,13 @@ export default function QualitePage() {
     { cle: "audites", libelle: "Audité", couleur: couleurEtat(S.VALIDE), test: (d) => [S.VALIDE, "Dossier vérifié"].includes(d.etat) },
     { cle: "annules", libelle: "Annulé", couleur: couleurEtat("Annulé"), test: (d) => ["Annulé", "Suspendue"].includes(d.etat) },
     { cle: "pause", libelle: "En pause", couleur: couleurEtat("en pause"), test: (d) => d.etat === "en pause", discret: true },
+    // Dossiers contrôlés par la personne connectée (pris en charge ou audités par elle)
+    {
+      cle: "mes",
+      libelle: "Mes contrôles",
+      couleur: "#2563EB",
+      test: (d) => !!nomActif && [d.valide_par, d.pris_en_charge_par].some((n) => String(n || "").trim().toLowerCase() === String(nomActif).trim().toLowerCase()),
+    },
     // Statuts personnalisés (Paramètres → Statuts)
     ...(options.statutsPerso || []).map((st) => ({
       cle: "perso:" + st,
@@ -400,23 +420,26 @@ export default function QualitePage() {
             )}
             {(d.etat === S.A_CONTROLER || d.etat === S.VERIF) && (
               <>
-                {!nomsValidateurs.includes(nomActif) && (
+                {!qualiteConnecte && (
                   <select
-                    className={`input input-sm w-44 ${auditeur ? "" : "border-isoRed/60"}`}
-                    value={auditeur}
-                    onChange={(e) => choisirAuditeur(e.target.value)}
+                    className={`input input-sm w-44 ${auditeurPour(d) ? "" : "border-isoRed/60"}`}
+                    value={auditeurPour(d)}
+                    onChange={(e) => {
+                      choisirAuditeur(e.target.value);
+                      setChoixAudit((c) => ({ ...c, [d.id]: e.target.value }));
+                    }}
                     aria-label="Audité par"
                     title="Nom enregistré comme « Audité par »"
                   >
                     <option value="">Audité par…</option>
-                    {nomsValidateurs.map((n) => (
+                    {choixAuditeurs(d).map((n) => (
                       <option key={n} value={n}>
                         {n}
                       </option>
                     ))}
                   </select>
                 )}
-                <button onClick={() => valider(d)} className="btn-success btn-sm" disabled={!auditeur}>
+                <button onClick={() => valider(d)} className="btn-success btn-sm" disabled={!auditeurPour(d)}>
                   <Icon name="check" size={14} />
                   Valider
                 </button>
@@ -753,7 +776,7 @@ export default function QualitePage() {
                           <span className="text-ink/35">—</span>
                         )}
                         {d.ingenieur_modif && <span className="block text-[11px] text-ink/50 capitalize">modif : {d.ingenieur_modif}</span>}
-                        {d.hors_habilitation && <span className="block text-[11px] text-isoGold-dark">hors fiche habituelle</span>}
+                        {d.hors_habilitation && d.ingenieur && !habilite(d.ingenieur, d.nom_operation) && <span className="block text-[11px] text-isoGold-dark">hors fiche habituelle</span>}
                       </td>
                       <td className="text-ink/70 whitespace-nowrap">{d.nom_operation}</td>
                       <td>

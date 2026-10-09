@@ -58,9 +58,10 @@ export default function SaisiePage() {
   const [derniereAction, setDerniereAction] = useState(null);
   const [message, setMessage] = useState(null);
   const fichiers = useFichiers(supabase, !!profile);
-  const celluleFichiers = (d) => (
+  const celluleFichiers = (d, sansInserer = false) => (
     <td onClick={(e) => e.stopPropagation()}>
       <CelluleFichiers
+        sansInserer={sansInserer}
         supabase={supabase}
         dossier={d}
         fichiers={fichiers.parDossier[d.id]}
@@ -495,7 +496,7 @@ export default function SaisiePage() {
                     <td>
                       <StatutDossier dossier={d} />
                     </td>
-                    {celluleFichiers(d)}
+                    {celluleFichiers(d, true)}
                   </tr>
                 ))}
                 {autres.length === 0 && (

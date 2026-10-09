@@ -6,27 +6,10 @@ import Avatar from "@/components/ui/Avatar";
 import Modal from "@/components/ui/Modal";
 import { EcranChargement, EcranErreurProfil } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
+import { presence, depuis } from "@/lib/presence";
 
 const BUCKET = "dossiers-fichiers";
 const MENTION = "Les échanges de la messagerie sont conservés et accessibles à l'administration.";
-
-/** Présence : en ligne (< 2 min et actif), absent (< 10 min), hors ligne. */
-function presence(p) {
-  if (!p?.derniere_activite) return { cle: "off", libelle: "Hors ligne", couleur: "#C3C8D0" };
-  const min = (Date.now() - new Date(p.derniere_activite).getTime()) / 60000;
-  if (min < 2 && p.presence_active) return { cle: "on", libelle: "En ligne", couleur: "#2E9E5B" };
-  if (min < 10) return { cle: "absent", libelle: "Absent", couleur: "#E6A23C" };
-  return { cle: "off", libelle: `Vu ${depuis(p.derniere_activite)}`, couleur: "#C3C8D0" };
-}
-function depuis(iso) {
-  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (min < 60) return `il y a ${min} min`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `il y a ${h} h`;
-  const d = new Date(iso);
-  const hier = new Date(Date.now() - 86400000).toDateString() === d.toDateString();
-  return hier ? `hier à ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : `le ${d.toLocaleDateString("fr-FR")}`;
-}
 
 async function appelApi(supabase, url, corps) {
   const {
@@ -816,6 +799,7 @@ function PanneauEquipe({ personnes, enLigne, peutEcrire, onChoisir, onFermer }) 
                       <span className={`block truncate capitalize ${pr.cle === "off" ? "text-ink/55" : ""}`}>{p.nom}</span>
                       <span className="block text-[10px] text-ink/40 truncate">
                         {pr.libelle}
+                        {p.role === "ingenieur" && p.occupe !== undefined && p.occupe !== null ? (p.occupe ? " · occupé" : " · libre") : ""}
                         {p.equipes?.length ? ` · ${p.equipes.join(", ")}` : ""}
                       </span>
                     </span>
