@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { clientService, configEmail, problemeConfigEmail, synchroniser, utilisateurDepuisRequete } from "@/lib/messagerieEmail";
+import { clientService, configEmail, expliquerErreur, problemeConfigEmail, synchroniser, utilisateurDepuisRequete } from "@/lib/messagerieEmail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ async function traiter(request) {
   if (pb) return NextResponse.json({ error: pb }, { status: 500 });
 
   const client = clientService();
-  const { data: cfg } = await client.from("parametres_config").select("id, rh_actif, rh_derniere_synchro").limit(1).maybeSingle();
+  const { data: cfg } = await client.from("parametres_config").select("id, rh_actif, rh_derniere_synchro").order("id").limit(1).maybeSingle();
   if (!cfg?.rh_actif) return NextResponse.json({ ignore: "liaison RH désactivée" });
   // Une relève toutes les 30 s au plus (sauf demande explicite de l'admin)
   const force = url.searchParams.get("force") === "1" && u?.profil?.role === "admin";
@@ -34,8 +34,9 @@ async function traiter(request) {
     await client.from("parametres_config").update({ rh_synchro_statut: statut }).eq("id", cfg.id);
     return NextResponse.json({ ok: true, ...bilan });
   } catch (e) {
-    await client.from("parametres_config").update({ rh_synchro_statut: `Erreur : ${e.message}`.slice(0, 300) }).eq("id", cfg.id);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    const msg = expliquerErreur(e);
+    await client.from("parametres_config").update({ rh_synchro_statut: `Erreur (lecture IMAP) : ${msg}`.slice(0, 400) }).eq("id", cfg.id);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 

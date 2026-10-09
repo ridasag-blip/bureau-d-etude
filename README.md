@@ -2,6 +2,13 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.16.2 — liaison RH : diagnostic
+
+- « Tester la connexion et envoyer un e-mail de test » enregistre d'abord l'adresse RH, puis teste séparément
+  l'envoi (SMTP) et la lecture (IMAP) de la boîte et affiche la cause exacte en cas d'échec.
+- Messages d'erreur explicites (mot de passe refusé, serveur introuvable, port fermé, certificat).
+- « dernière relève il y a -1 min » corrigé (« à l'instant »).
+
 ## Version 3.16.1 — « Audité par » rempli automatiquement
 
 - Qualité → Valider : « Audité par » reprend automatiquement la personne qui a le dossier « en contrôle »

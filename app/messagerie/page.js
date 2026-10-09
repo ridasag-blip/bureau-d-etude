@@ -72,7 +72,7 @@ export default function MessageriePage() {
   // ---------- chargement ----------
   const chargerListe = useCallback(async () => {
     const [{ data: cfg }, conv, mem, nl] = await Promise.all([
-      supabase.from("parametres_config").select("*").limit(1).maybeSingle(),
+      supabase.from("parametres_config").select("*").order("id").limit(1).maybeSingle(),
       supabase.from("chat_conversations").select("*").order("dernier_message_at", { ascending: false }),
       supabase.from("chat_membres").select("conversation_id, user_id"),
       supabase.rpc("fn_chat_non_lus"),
@@ -830,8 +830,8 @@ function Reglages({ supabase, config, personnes, moi, onFermer, onMaj }) {
 
   async function enregistrer(maj) {
     setCfg((c) => ({ ...c, ...maj }));
-    const { error } = await supabase.from("parametres_config").update(maj).eq("id", config.id);
-    setMsg(error ? "Erreur : " + error.message : "Enregistré ✓");
+    const { data, error } = await supabase.from("parametres_config").update(maj).eq("id", config.id).select("id");
+    setMsg(error ? "Erreur : " + error.message : !data?.length ? "Non enregistré : droits insuffisants sur les réglages (migration V12 ?)" : "Enregistré ✓");
     onMaj();
   }
   async function personne(p) {
@@ -1052,11 +1052,29 @@ function LiaisonRh({ supabase, cfg, config, enregistrer, interrupteur }) {
   const [emails, setEmails] = useState(cfg.rh_emails);
   const [libelle, setLibelle] = useState(cfg.rh_libelle);
   const [etat, setEtat] = useState("");
-  async function appel(url) {
+  async function sauver() {
+    return enregistrer({ rh_emails: emails.trim(), rh_libelle: libelle.trim() || "Ressources humaines" });
+  }
+  async function tester() {
+    setEtat("…");
+    await sauver();
+    try {
+      const r = await appelApi(supabase, "/api/messagerie/test", { rhEmails: emails });
+      setEtat(
+        [
+          `Envoi (SMTP) : ${r.smtp}${r.envoyeA ? ` — e-mail de test envoyé à ${r.envoyeA.join(", ")}` : ""}`,
+          `Lecture (IMAP) : ${r.imap}`,
+        ].join("\n")
+      );
+    } catch (e) {
+      setEtat("Erreur : " + e.message);
+    }
+  }
+  async function relever() {
     setEtat("…");
     try {
-      const r = await appelApi(supabase, url);
-      setEtat(r.envoyeA ? `E-mail de test envoyé à ${r.envoyeA.join(", ")} ✓` : `Relève : ${r.deposes ?? 0} message(s) reçu(s)${r.ignore ? ` (${r.ignore})` : ""}`);
+      const r = await appelApi(supabase, "/api/messagerie/sync?force=1");
+      setEtat(`Relève : ${r.deposes ?? 0} message(s) reçu(s)${r.ignore ? ` (${r.ignore})` : ""}`);
     } catch (e) {
       setEtat("Erreur : " + e.message);
     }
@@ -1075,19 +1093,21 @@ function LiaisonRh({ supabase, cfg, config, enregistrer, interrupteur }) {
         </label>
       </div>
       <div className="flex flex-wrap gap-2 items-center">
-        <button className="btn-primary btn-sm" onClick={() => enregistrer({ rh_emails: emails.trim(), rh_libelle: libelle.trim() || "Ressources humaines" })}>
+        <button className="btn-primary btn-sm" onClick={sauver}>
           <Icon name="check" size={14} />
           Enregistrer
         </button>
-        <button className="btn-secondary btn-sm" onClick={() => appel("/api/messagerie/test")}>
+        <button className="btn-secondary btn-sm" onClick={tester}>
           <Icon name="send" size={14} />
-          Envoyer un e-mail de test
+          Tester la connexion et envoyer un e-mail de test
         </button>
-        <button className="btn-secondary btn-sm" onClick={() => appel("/api/messagerie/sync?force=1")}>
+        <button className="btn-secondary btn-sm" onClick={relever}>
           <Icon name="reset" size={14} />
           Relever les e-mails maintenant
         </button>
-        {etat && <span className={`text-xs ${etat.startsWith("Erreur") ? "text-isoRed-dark" : "text-ink/60"}`}>{etat === "…" ? "En cours…" : etat}</span>}
+        {etat && (
+          <span className={`text-xs whitespace-pre-line basis-full ${/Erreur/.test(etat) ? "text-isoRed-dark" : "text-isoGreen-dark"}`}>{etat === "…" ? "En cours…" : etat}</span>
+        )}
       </div>
       <div className="text-xs text-ink/55 bg-ink/[0.03] rounded-lg p-3 leading-relaxed">
         <p>
