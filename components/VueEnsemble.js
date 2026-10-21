@@ -7,6 +7,7 @@ import { S } from "@/lib/constants";
 import { serieCompte } from "@/lib/series";
 import { bornes, bornesPrecedentes, dansBornes, libelleComparaison, libellePeriode } from "@/lib/periode";
 import { ingenieurResponsable } from "@/lib/rapportQualite";
+import { nbDossiersAudites, serieDossiersAudites } from "@/lib/verifications";
 
 export const C_NOUVEAU = "#1F6FA8";
 export const C_MODIF = "#E3A23B";
@@ -46,11 +47,12 @@ function chiffres(dossiers, retours, verifs, b, fiche) {
   const rs = retours.filter((r) => (fiche === "Tous" || r.operation === fiche) && dansBornes(r.date, b));
   const audites = ds.filter((d) => estAudite(d) && dansBornes(d.date_verification, b));
   // Toutes les vérifications de la période (un dossier revenu et réaudité compte à chaque fois)
-  const vs = verifs.filter((v) => (fiche === "Tous" || v.dossier?.nom_operation === fiche) && dansBornes(v.date, b));
+  const vs = verifs.filter((v) => fiche === "Tous" || v.dossier?.nom_operation === fiche);
   return {
     nouveaux: ds.filter((d) => estNouveau(d) && dansBornes(d.date, b)).length,
     modifs: ds.filter((d) => estModification(d) && dansBornes(d.date, b)).length,
-    audites: vs.length,
+    // Dossiers réellement audités (qualification « Audité ») sur la période, chacun compté une fois
+    audites: nbDossiersAudites(vs, (date) => dansBornes(date, b)),
     premierCoup: audites.length ? Math.round((audites.filter((d) => !d.nb_retours).length / audites.length) * 100) : null,
     ri: rs.filter((r) => r.type === "interne").length,
     rc: rs.filter((r) => r.type === "client").length,
@@ -220,7 +222,7 @@ export default function VueEnsemble({ dossiers, retours, verifications = [], opt
   const tuiles = [
     { label: "Nouveaux dossiers", valeur: nf(c.nouveaux), ...ecart(c.nouveaux, avant.nouveaux, comp), serie: serieCompte(dsF, "date", estNouveau), couleur: C_NOUVEAU, couleurSerie: ["#BBD4EA", C_NOUVEAU], actif: true },
     { label: "Modifications", valeur: nf(c.modifs), ...ecart(c.modifs, avant.modifs, comp, true), serie: serieCompte(dsF, "date", estModification), couleur: T_MODIF, couleurSerie: ["#F2D9AE", C_MODIF] },
-    { label: "Audités", valeur: nf(c.audites), note: c.premierCoup === null ? "" : `${c.premierCoup} % du 1er coup`, ton: "vert", serie: serieCompte(verifications.filter((v) => fiche === "Tous" || v.dossier?.nom_operation === fiche), "date"), couleur: C_AUDIT, aide: "Chaque vérification compte, même quand un dossier revient et est audité une nouvelle fois", couleurSerie: ["#C7E1BF", C_AUDIT] },
+    { label: "Audités", valeur: nf(c.audites), note: c.premierCoup === null ? "" : `${c.premierCoup} % du 1er coup`, ton: "vert", serie: serieDossiersAudites(verifications.filter((v) => fiche === "Tous" || v.dossier?.nom_operation === fiche)), couleur: C_AUDIT, aide: "Dossiers dont le statut est « Audité », audités par la Qualité sur la période", couleurSerie: ["#C7E1BF", C_AUDIT] },
     { label: "Retours internes", valeur: nf(c.ri), ...ecart(c.ri, avant.ri, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "interne"), couleur: C_RI, couleurSerie: ["#EBD7AE", C_RI] },
     { label: "Retours client", valeur: nf(c.rc), ...ecart(c.rc, avant.rc, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "client"), couleur: C_RC, couleurSerie: ["#F1C9C5", C_RC] },
   ];

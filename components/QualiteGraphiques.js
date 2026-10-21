@@ -23,7 +23,7 @@ function Barres({ lignes, vide }) {
  * Colonne de droite de la page Qualité quand aucun dossier n'est ouvert :
  * envois au contrôle du jour par heure, causes de retour du mois, contrôles par contrôleur aujourd'hui.
  */
-export default function QualiteGraphiques({ dossiers, verifications }) {
+export default function QualiteGraphiques({ dossiers, verifications, moi = "", seulementMoi = false }) {
   const jour = auj();
   const mois = jour.slice(0, 7);
 
@@ -53,13 +53,24 @@ export default function QualiteGraphiques({ dossiers, verifications }) {
 
   // Contrôles faits aujourd'hui, par contrôleur
   const ctrl = {};
-  // Chaque vérification compte (un même dossier revenu et réaudité compte deux fois)
-  for (const v of verifications || dossiers.map((d) => ({ date: d.date_verification, par: d.valide_par }))) {
+  // Contrôles par contrôleur : « audités » = dossiers validés, « vérifications » = chaque contrôle
+  // (y compris ceux qui finissent en retour interne). Un même dossier vérifié deux fois compte deux fois.
+  const cle = (n) => String(n || "").trim().toLowerCase();
+  const liste = verifications || dossiers.filter((d) => d.date_verification).map((d) => ({ date: d.date_verification, par: d.valide_par, audit: true }));
+  const parPersonne = {}; // { nom: { jour: {a, v}, mois: {a, v} } }
+  for (const v of liste) {
     if (!v.par || !v.date) continue;
-    if (new Date(v.date).toLocaleDateString("sv-SE") !== jour) continue;
-    ctrl[v.par] = (ctrl[v.par] || 0) + 1;
+    const j = new Date(v.date).toLocaleDateString("sv-SE");
+    const k = cle(v.par);
+    const p = (parPersonne[k] = parPersonne[k] || { nom: v.par, jour: { a: 0, v: 0 }, mois: { a: 0, v: 0 } });
+    for (const [periode, ok] of [["jour", j === jour], ["mois", j.slice(0, 7) === mois]]) {
+      if (!ok) continue;
+      p[periode].v += 1;
+      if (v.audit) p[periode].a += 1;
+    }
   }
-  const topCtrl = Object.entries(ctrl).sort((a, b) => b[1] - a[1]);
+  const mes = parPersonne[cle(moi)] || { jour: { a: 0, v: 0 }, mois: { a: 0, v: 0 } };
+  const equipe = Object.values(parPersonne).filter((p) => p.jour.v > 0).sort((x, y) => y.jour.v - x.jour.v);
 
   return (
     <div className="flex flex-col gap-4 xl:sticky xl:top-[84px]">
@@ -106,12 +117,67 @@ export default function QualiteGraphiques({ dossiers, verifications }) {
         </h3>
         <Barres lignes={topCauses} vide="Aucun retour ce mois-ci." />
       </section>
-      <section className="card">
-        <h3 className="text-[15px] font-semibold px-4 pt-4 pb-2 flex justify-between items-baseline">
-          Contrôleurs <span className="text-xs font-normal text-ink/45">aujourd'hui</span>
-        </h3>
-        <Barres lignes={topCtrl} vide="Aucun dossier audité aujourd'hui." />
-      </section>
+      {seulementMoi ? (
+        <section className="card">
+          <h3 className="text-[15px] font-semibold px-4 pt-4 pb-1 flex justify-between items-baseline">
+            Mes contrôles <span className="text-xs font-normal text-ink/45 capitalize">{moi}</span>
+          </h3>
+          <table className="w-full text-sm mb-3">
+            <thead>
+              <tr className="text-xs text-ink/50">
+                <th className="text-left font-medium px-4 py-2" />
+                <th className="text-right font-medium px-2 py-2">Dossiers audités</th>
+                <th className="text-right font-medium px-4 py-2">Vérifications</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["Aujourd'hui", mes.jour],
+                ["Ce mois", mes.mois],
+              ].map(([l, c]) => (
+                <tr key={l} className="border-t border-line">
+                  <td className="px-4 py-2.5 text-ink/70">{l}</td>
+                  <td className="px-2 py-2.5 text-right">
+                    <b className="font-display chiffre text-[22px] text-isoGreen-dark">{c.a}</b>
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <b className="font-display chiffre text-[22px] text-brand-600">{c.v}</b>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="px-4 pb-4 text-xs text-ink/50">Vérifications : chaque contrôle compte, y compris ceux qui finissent en retour interne, et un dossier revenu puis revérifié compte à chaque fois.</p>
+        </section>
+      ) : (
+        <section className="card">
+          <h3 className="text-[15px] font-semibold px-4 pt-4 pb-1 flex justify-between items-baseline">
+            Contrôleurs <span className="text-xs font-normal text-ink/45">aujourd'hui</span>
+          </h3>
+          {equipe.length === 0 ? (
+            <p className="px-4 pb-4 text-sm text-ink/45">Aucun contrôle aujourd'hui.</p>
+          ) : (
+            <table className="w-full text-sm mb-3">
+              <thead>
+                <tr className="text-xs text-ink/50">
+                  <th className="text-left font-medium px-4 py-2">Contrôleur</th>
+                  <th className="text-right font-medium px-2 py-2">Audités</th>
+                  <th className="text-right font-medium px-4 py-2">Vérifications</th>
+                </tr>
+              </thead>
+              <tbody>
+                {equipe.map((p) => (
+                  <tr key={p.nom} className="border-t border-line">
+                    <td className="px-4 py-2 capitalize">{p.nom}</td>
+                    <td className="px-2 py-2 text-right tabular font-semibold text-isoGreen-dark">{p.jour.a}</td>
+                    <td className="px-4 py-2 text-right tabular font-semibold text-brand-600">{p.jour.v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
     </div>
   );
 }

@@ -14,8 +14,8 @@ const LINKS = [
   { href: "/mes-dossiers", label: "Mes dossiers", icone: "folder", roles: ["ingenieur"] },
   { href: "/qualite", label: "Qualité", icone: "shield", roles: ["admin", "qualite"] },
   { href: "/dashboard", label: "Dashboard", icone: "dashboard", roles: ["admin", "qualite"] },
-  { href: "/export", label: "Export", icone: "download", roles: ["admin"] },
-  { href: "/facturation", label: "Facturation", icone: "receipt", roles: ["admin"] },
+  { href: "/export", label: "Export", icone: "download", roles: ["admin"], superviseur: true },
+  { href: "/facturation", label: "Facturation", icone: "receipt", roles: ["admin"], superviseur: true },
   { href: "/erreurs", label: "Erreurs", icone: "alert", roles: ["admin", "qualite", "ingenieur"] },
   { href: "/messagerie", label: "Messagerie", icone: "message", roles: ["admin", "qualite", "ingenieur"] },
   { href: "/parametres", label: "Paramètres", icone: "settings", roles: ["admin", "qualite"] },
@@ -27,6 +27,7 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
   const pathname = usePathname();
   const router = useRouter();
   const [enAttente, setEnAttente] = useState(null);
+  const [fonction, setFonction] = useState(null); // null = pas encore lu ; "" = admin principal
   const [nonLus, setNonLus] = useState(0);
   const [menuMobile, setMenuMobile] = useState(false);
   const [menuUtilisateur, setMenuUtilisateur] = useState(false);
@@ -58,6 +59,16 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
     };
   }, [role]);
   useTempsReel(supabaseNav.current, ["dossiers"], majEnAttente, estStaff);
+
+  useEffect(() => {
+    if (role !== "admin") return;
+    (async () => {
+      const { data: u } = await supabaseNav.current.auth.getUser();
+      if (!u?.user) return;
+      const { data, error } = await supabaseNav.current.from("profiles").select("fonction").eq("id", u.user.id).maybeSingle();
+      setFonction(error ? "" : data?.fonction === "Responsable" ? "Responsable" : "");
+    })();
+  }, [role]);
 
   // Messages non lus du tchat (rafraîchi toutes les 30 s)
   useEffect(() => {
@@ -112,7 +123,8 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
     router.push("/login");
   }
 
-  const liens = LINKS.filter((l) => l.roles.includes(role));
+  // Export et Facturation : administrateur principal seulement (pas les Responsables)
+  const liens = LINKS.filter((l) => l.roles.includes(role) && (!l.superviseur || fonction === ""));
 
   function lien(l, mobile) {
     const actif = pathname?.startsWith(l.href);
