@@ -37,6 +37,7 @@ import CelluleFichiers, { useFichiers } from "@/components/CelluleFichiers";
 import { ajouterEchange } from "@/components/EchangesDossier";
 import PanneauIngenieurs from "@/components/PanneauIngenieurs";
 import TuilesCockpit from "@/components/TuilesCockpit";
+import { FiltreFiche } from "@/components/FiltrePeriode";
 import { serieCompte, ecartHier } from "@/lib/series";
 
 export default function SaisiePage() {
@@ -48,6 +49,7 @@ export default function SaisiePage() {
   const nominatif = ["admin", "qualite"].includes(profile?.role);
   const nomActif = nominatif ? profile?.nom_complet : nomSelectionne;
   const nomTrace = nomActif || null;
+  const [ficheBarre, setFicheBarre] = useState("Tous"); // filtre opération de la barre de chiffres
   const [dossiers, setDossiers] = useState([]);
   const [dossierOuvert, setDossierOuvert] = useState(null);
   const [commentaires, setCommentaires] = useState([]);
@@ -338,10 +340,16 @@ export default function SaisiePage() {
               </button>
             </>
           }
-        />
+        >
+          <div className="filtres-hero">
+            <FiltreFiche operations={options.operations} valeur={ficheBarre} onChange={setFicheBarre} grand />
+          </div>
+        </PageHeader>
 
-        {(() => {
-          const tous = [...file, ...dossiers];
+        {((fileTout) => {
+          const okOp = (d) => ficheBarre === "Tous" || d.nom_operation === ficheBarre;
+          const file = fileTout.filter(okOp);
+          const tous = [...file, ...dossiers.filter(okOp)];
           const ancien = (l) => (l.length ? Math.max(...l.map((d) => (Date.now() - new Date(d.date_mise_en_file || d.created_at).getTime()) / 3600000)) : null);
           const vieux = ancien(file);
           const estModif = (d) => d.nature_prod === "Modification";
@@ -352,31 +360,64 @@ export default function SaisiePage() {
           const creesNv = serieCompte(tous, "created_at", (d) => !estModif(d));
           const creesMd = serieCompte(tous, "created_at", estModif);
           const ec1 = ecartHier(crees);
-          const noteFile = (l) => {
-            const prio = l.filter((d) => d.prioritaire).length;
-            return prio ? `${prio} prioritaire(s)` : "";
-          };
           return (
             <TuilesCockpit
               items={[
-                { label: "Dossiers à auditer", valeur: file.length, note: vieux !== null ? `plus ancien : ${formatDuree(vieux)}` : "file vide", ton: vieux !== null && vieux >= 6 ? "rouge" : "neutre", serie: serieCompte(tous, "date_mise_en_file"), actif: true, aide: "Tous les dossiers dans la file, en attente d'un ingénieur" },
+                {
+                  label: "Dossiers à auditer",
+                  split: [
+                    { label: "nouveaux", valeur: fileNv.length, couleur: "#1F6FA8" },
+                    { label: "modifs", valeur: fileMd.length, couleur: "#B7791F" },
+                  ],
+                  note: vieux !== null ? `depuis ${formatDuree(vieux)}` : "file vide",
+                  ton: vieux !== null && vieux >= 6 ? "rouge" : "neutre",
+                  serie: serieCompte(tous, "date_mise_en_file"),
+                  actif: true,
+                  aide: `${file.length} dossier(s) dans la file, en attente d'un ingénieur`,
+                },
                 {
                   label: "Dossiers d'aujourd'hui",
                   split: [
-                    { label: "nouveaux dossiers", valeur: creesNv[6], couleur: "#1F6FA8" },
-                    { label: "modifications", valeur: creesMd[6], couleur: "#B7791F" },
+                    { label: "nouveaux", valeur: creesNv[6], couleur: "#1F6FA8" },
+                    { label: "modifs", valeur: creesMd[6], couleur: "#B7791F" },
                   ],
-                  note: ec1.texte,
-                  ton: ec1.ton,
+                  aide: `Dossiers ajoutés aujourd'hui dans la file (saisis ou importés) · ${ec1.texte}`,
                   serie: crees,
-                  aide: "Dossiers ajoutés aujourd'hui dans la file (saisis ou importés)",
                 },
-                { label: "Nouveaux à auditer", valeur: fileNv.length, aide: "Nouveaux dossiers dans la file", couleur: "#1F6FA8", note: noteFile(fileNv), ton: "neutre", serie: serieCompte(tous, "date_mise_en_file", (d) => !estModif(d)) },
-                { label: "Modifs à auditer", valeur: fileMd.length, aide: "Modifications dans la file", couleur: "#B7791F", note: noteFile(fileMd), ton: "neutre", serie: serieCompte(tous, "date_mise_en_file", estModif) },
+                (() => {
+                  // Retours pas encore traités ou en cours de traitement (file, à faire, en cours, en pause, attente d'info)
+                  const ETATS_RETOUR = [S.FILE, S.ASSIGNE, S.EN_COURS, "en pause", S.ATTENTE_INFO];
+                  const enAttente = tous.filter((d) => d.a_corriger && ETATS_RETOUR.includes(d.etat));
+                  const client = enAttente.filter((d) => typeDernierRetour(d) === "client").length;
+                  return {
+                    label: "Retours à traiter",
+                    split: [
+                      { label: "retours internes", valeur: enAttente.length - client, couleur: "#A8700E" },
+                      { label: "retours client", valeur: client, couleur: "#C23A33" },
+                    ],
+                    serie: [],
+                    aide: "Dossiers revenus en retour, pas encore traités ou en cours de traitement (dans la file, à faire, en cours, en pause ou en attente d'info)",
+                  };
+                })(),
+                (() => {
+                  // Ingénieurs (habilités sur la fiche choisie) sans dossier en cours, sur le total
+                  const noms = (options.ingenieursAssignables || options.ingenieurs || []).filter((n) => ficheBarre === "Tous" || (options.habilitations?.[n] || []).includes(ficheBarre));
+                  const occ = new Set(dossiers.filter((d) => d.etat === S.EN_COURS).map((d) => String(d.ingenieur_modif || d.ingenieur || "").toLowerCase()));
+                  const libres = noms.filter((n) => !occ.has(String(n).toLowerCase())).length;
+                  return {
+                    label: "Ingénieurs sans dossier",
+                    split: [
+                      { label: "sans dossier", valeur: libres, couleur: libres ? "#B7791F" : "#3E8A2F" },
+                      { label: ficheBarre === "Tous" ? "au total" : "habilités", valeur: noms.length },
+                    ],
+                    serie: [],
+                    aide: "Ingénieurs qui n'ont aucun dossier « En cours », sur le nombre total d'ingénieurs",
+                  };
+                })(),
               ]}
             />
           );
-        })()}
+        })(file)}
 
         <ObjectifJour supabase={supabase} operations={options.operations} />
 

@@ -9,7 +9,6 @@ import GraphiquePopup from "@/components/GraphiquePopup";
 import VueEnsemble from "@/components/VueEnsemble";
 import ProductionEnCeMoment, { FiltreEquipe } from "@/components/ProductionEnCeMoment";
 import FiltrePeriode, { FiltreFiche } from "@/components/FiltrePeriode";
-import { libellePeriode } from "@/lib/periode";
 import { chargerVerifications, debutHistorique, listeVerifications } from "@/lib/verifications";
 import PageHeader from "@/components/ui/PageHeader";
 import Icon from "@/components/ui/Icon";
@@ -86,7 +85,7 @@ export default function DashboardPage() {
 
   const filtres_ = appliquerFiltres(dossiers, filtres);
   const sousTitre = {
-    apercu: `Nouveaux dossiers, modifications et retours · ${libellePeriode(periode)} · ${fiche === "Tous" ? "toutes les fiches" : fiche}.`,
+    apercu: undefined,
     live: "Qui fait quoi en ce moment, ingénieurs et service qualité.",
     stats: "Statistiques par agent et par opération.",
     rapport: "Rapport de contrôle qualité et classement des ingénieurs.",
@@ -140,7 +139,6 @@ export default function DashboardPage() {
                   <FiltreEquipe valeur={equipe} onChange={setEquipe} grand />
                 </>
               )}
-              <span className={onglet === "live" ? "sm:ml-3" : ""}>Fiche CEE</span>
               <FiltreFiche operations={options.operations} valeur={fiche} onChange={setFiche} grand />
               {onglet === "apercu" && (
                 <span className="flex items-center gap-3 lg:ml-auto">

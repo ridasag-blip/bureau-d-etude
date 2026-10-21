@@ -21,7 +21,7 @@ import { gardePage } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
 import { useRafraichissement } from "@/lib/useRafraichissement";
 import { useTempsReel, signalerMajDossiers } from "@/lib/useTempsReel";
-import { chargerVerifications, listeVerifications } from "@/lib/verifications";
+import { chargerVerifications, listeVerifications, serieDossiersAudites } from "@/lib/verifications";
 import { useValidateurActif } from "@/lib/useValidateurActif";
 import { supprimerDossierAvecTrace } from "@/lib/suppressionDossier";
 import { formatDate, formatDuree, S, STATUTS_MANUELS, TYPES_RETOUR, ETATS, rangsModifs, typeDernierRetour } from "@/lib/constants";
@@ -923,7 +923,8 @@ export default function QualitePage() {
           const delai = delais.length ? delais.reduce((a, b) => a + b, 0) / delais.length : null;
           const envois = serieCompte(dossiers, "date_soumission");
           // Chaque vérification compte, même si le même dossier est revenu et a été audité plusieurs fois
-          const audites = serieCompte(listeVerifications(dossiers, verifs), "date");
+          // Dossiers réellement audités (qualification « Audité ») par la Qualité, un dossier compté une fois par jour
+          const audites = serieDossiersAudites(listeVerifications(dossiers, verifs));
           // Délai moyen de traitement par l'ingénieur (pauses exclues), dossiers envoyés sur 30 jours
           const envoyes30 = dossiers.filter((d) => d.date_soumission && new Date(d.date_soumission).getTime() >= il30);
           const durees = envoyes30.map(heuresTraitementFini).filter((h) => h !== null && h > 0 && h < 24 * 30);
@@ -1139,7 +1140,7 @@ export default function QualitePage() {
           </div>
 
           <div className={actif_ ? "order-1 xl:order-2" : "hidden xl:block"}>
-            {actif_ ? panneauAction(actif_) : <QualiteGraphiques dossiers={dossiers} verifications={listeVerifications(dossiers, verifs)} />}
+            {actif_ ? panneauAction(actif_) : <QualiteGraphiques dossiers={dossiers} verifications={listeVerifications(dossiers, verifs, { avecRetours: true })} moi={nomActif} seulementMoi={profile?.role === "qualite"} />}
           </div>
         </div>
       </main>

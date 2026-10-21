@@ -74,7 +74,8 @@ export default function FacturationPage() {
   const [aAnnuler, setAAnnuler] = useState(null);
   const [motif, setMotif] = useState("");
 
-  const estAdmin = profile?.role === "admin";
+  // Administrateur principal seulement (les comptes Admin « Responsable » n'y ont pas accès)
+  const estAdmin = profile?.role === "admin" && profile?.fonction !== "Responsable";
 
   async function chargerReferentiel() {
     const [p, f] = await Promise.all([
@@ -212,7 +213,7 @@ export default function FacturationPage() {
     return (
       <div className="min-h-screen">
         <Navbar role={profile.role} nom={profile.nom_complet} />
-        <main className="max-w-3xl mx-auto px-4 py-16 text-center text-ink/60">La facturation est réservée aux comptes Admin.</main>
+        <main className="max-w-3xl mx-auto px-4 py-16 text-center text-ink/60">La facturation est réservée à l'administrateur principal.</main>
       </div>
     );
   }
