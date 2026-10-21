@@ -2,6 +2,23 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.32 — tuile « Retours à traiter »
+
+- Saisie : la tuile « Retours à reprendre » devient « Retours à traiter » : retours pas encore traités ou en cours de traitement (dans la file, à faire, en cours, en pause, en attente d'info), découpés retours internes / retours client.
+
+## Version 3.31 — chiffres de la Saisie, « Audités » au sens du statut, accès Export / Facturation
+
+- **Saisie** : « Dossiers à auditer » coupé en nouveaux / modifs ; nouvelle tuile « Retours à reprendre » (retours internes / retours client, dans la file ou attribués mais pas commencés) ; « Ingénieurs sans dossier » avec le total.
+- **Audités** (Qualité « Audités aujourd'hui », tableau de bord) : nombre de dossiers dont la qualification est « Audité », audités par la Qualité sur la période, chacun compté une fois. Les validations faites par l'ingénieur lui-même ne comptent pas. Les revérifications restent visibles dans « Mes contrôles ».
+- **Export et Facturation** : réservés à l'administrateur principal (masqués et bloqués pour les comptes Admin « Responsable »).
+- Libellé « Fiche CEE » retiré devant les filtres ; phrase du sous-titre retirée sur le tableau de bord.
+
+## Version 3.30 — filtre fiche en Saisie, audits et vérifications par contrôleur
+
+- **Saisie** : filtre Fiche CEE sur la barre de chiffres ; 5e tuile « Ingénieurs sans dossier » avec le nombre total d'ingénieurs (ou habilités sur la fiche choisie).
+- **Audités aujourd'hui** (Qualité, tableau de bord) : seuls les audits faits par la Qualité comptent ; les dossiers « corrigés et validés par l'ingénieur » ne sont plus comptés comme audits.
+- **Mes contrôles** (page Qualité, en bas à droite) : un compte Qualité ne voit que ses propres chiffres, aujourd'hui et ce mois : dossiers audités et vérifications (chaque contrôle, y compris ceux qui finissent en retour interne ; un dossier revérifié compte à chaque fois). L'admin voit le tableau de tous les contrôleurs.
+
 ## Version 3.29 — « Lever le retour et valider »
 
 - Qualité : le bouton « Corriger : annuler ce retour interne (erreur Qualité) » devient « Lever le retour et valider » (retour levé après une 2e vérification). Le retour reste dans l'historique, marqué « levé », et ne compte plus dans les statistiques de l'ingénieur ni dans le taux du premier coup. Pas de nouvelle migration.

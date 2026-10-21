@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 
 // Routes accessibles uniquement à certains rôles
 const ROUTES_ADMIN_ONLY = ["/beneficiaires", "/rapport", "/export", "/facturation"];
+// Réservées à l'administrateur principal (pas aux comptes Admin « Responsable »)
+const ROUTES_SUPERVISEUR = ["/export", "/facturation"];
 const ROUTES_ADMIN_QUALITE = ["/dashboard", "/statistiques", "/qualite", "/saisie", "/parametres"];
 const ROUTES_INGENIEUR_ONLY = ["/mes-dossiers"];
 
@@ -60,7 +62,10 @@ export async function middleware(request) {
     const role = profile?.role;
 
 
-    if (ROUTES_ADMIN_ONLY.some((r) => path.startsWith(r)) && role !== "admin") {
+    if (
+      (ROUTES_ADMIN_ONLY.some((r) => path.startsWith(r)) && role !== "admin") ||
+      (ROUTES_SUPERVISEUR.some((r) => path.startsWith(r)) && profile?.fonction === "Responsable")
+    ) {
       const url = request.nextUrl.clone();
       url.pathname = accueilPour(role);
       return NextResponse.redirect(url);
