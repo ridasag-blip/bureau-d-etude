@@ -30,7 +30,11 @@ export function listeRetours(dossiers, retours) {
   if (retours) {
     return retours.map((r) => {
       const d = parId[r.dossier_id];
-      return { type: r.type === "client" ? "client" : "interne", date: r.created_at, ingenieur: r.ingenieur || (d && ingenieurResponsable(d)), operation: r.operation || d?.nom_operation, client: d?.client };
+      const type = r.type === "client" ? "client" : "interne";
+      // Retour interne : imputé à l'ingénieur du dossier. Retour client : c'est une nouvelle modif,
+      // créditée à l'ingénieur qui la traite (ingénieur de modif, sinon ingénieur du dossier).
+      const fautif = r.ingenieur || (d && ingenieurResponsable(d));
+      return { type, date: r.created_at, ingenieur: type === "client" ? (d ? ingenieurResponsable(d) : r.ingenieur) : fautif, operation: r.operation || d?.nom_operation, client: d?.client };
     });
   }
   const l = [];
@@ -50,7 +54,8 @@ function chiffres(dossiers, retours, verifs, b, fiche) {
   const vs = verifs.filter((v) => fiche === "Tous" || v.dossier?.nom_operation === fiche);
   return {
     nouveaux: ds.filter((d) => estNouveau(d) && dansBornes(d.date, b)).length,
-    modifs: ds.filter((d) => estModification(d) && dansBornes(d.date, b)).length,
+    // Modifs = modifications saisies + chaque retour client (une nouvelle modif à la date du retour)
+    modifs: ds.filter((d) => estModification(d) && dansBornes(d.date, b)).length + rs.filter((r) => r.type === "client").length,
     // Dossiers réellement audités (qualification « Audité ») sur la période, chacun compté une fois
     audites: nbDossiersAudites(vs, (date) => dansBornes(date, b)),
     premierCoup: audites.length ? Math.round((audites.filter((d) => !d.nb_retours).length / audites.length) * 100) : null,
@@ -121,7 +126,7 @@ function ProductionParIngenieur({ dossiers, retours, ingenieurs, operations, per
       return {
         nom: n,
         nv: siens.filter(estNouveau).length,
-        md: siens.filter(estModification).length,
+        md: siens.filter(estModification).length + r.filter((x) => x.type === "client").length,
         ri: r.filter((x) => x.type === "interne").length,
         rc: r.filter((x) => x.type === "client").length,
       };
@@ -159,8 +164,8 @@ function ProductionParIngenieur({ dossiers, retours, ingenieurs, operations, per
               <th>Ingénieur</th>
               <th className="text-right">Nouveaux dossiers</th>
               <th className="text-right">Modifications</th>
-              <th className="text-right">Retours internes</th>
-              <th className="text-right">Retours client</th>
+              <th className="text-right">dont retours internes</th>
+              <th className="text-right">dont retours client</th>
               <th className="w-[28%]">Répartition</th>
               <th className="text-right">Total</th>
             </tr>
@@ -221,10 +226,10 @@ export default function VueEnsemble({ dossiers, retours, verifications = [], opt
 
   const tuiles = [
     { label: "Nouveaux dossiers", valeur: nf(c.nouveaux), ...ecart(c.nouveaux, avant.nouveaux, comp), serie: serieCompte(dsF, "date", estNouveau), couleur: C_NOUVEAU, couleurSerie: ["#BBD4EA", C_NOUVEAU], actif: true },
-    { label: "Modifications", valeur: nf(c.modifs), ...ecart(c.modifs, avant.modifs, comp, true), serie: serieCompte(dsF, "date", estModification), couleur: T_MODIF, couleurSerie: ["#F2D9AE", C_MODIF] },
+    { label: "Modifications", valeur: nf(c.modifs), ...ecart(c.modifs, avant.modifs, comp, true), serie: (() => { const a = serieCompte(dsF, "date", estModification), r = serieCompte(rsF, "date", (x) => x.type === "client"); return a.map((v, i) => v + r[i]); })(), couleur: T_MODIF, couleurSerie: ["#F2D9AE", C_MODIF], aide: "Modifications saisies + chaque retour client (compté comme une nouvelle modif à la date du retour)" },
     { label: "Audités", valeur: nf(c.audites), note: c.premierCoup === null ? "" : `${c.premierCoup} % du 1er coup`, ton: "vert", serie: serieDossiersAudites(verifications.filter((v) => fiche === "Tous" || v.dossier?.nom_operation === fiche)), couleur: C_AUDIT, aide: "Dossiers dont le statut est « Audité », audités par la Qualité sur la période", couleurSerie: ["#C7E1BF", C_AUDIT] },
-    { label: "Retours internes", valeur: nf(c.ri), ...ecart(c.ri, avant.ri, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "interne"), couleur: C_RI, couleurSerie: ["#EBD7AE", C_RI] },
-    { label: "Retours client", valeur: nf(c.rc), ...ecart(c.rc, avant.rc, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "client"), couleur: C_RC, couleurSerie: ["#F1C9C5", C_RC] },
+    { label: "Retours internes", valeur: nf(c.ri), ...ecart(c.ri, avant.ri, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "interne"), couleur: C_RI, couleurSerie: ["#EBD7AE", C_RI], aide: "Inclus dans les dossiers et modifs : un retour interne ne crée pas de nouvelle unité" },
+    { label: "Retours client", valeur: nf(c.rc), ...ecart(c.rc, avant.rc, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "client"), couleur: C_RC, couleurSerie: ["#F1C9C5", C_RC], aide: "Inclus dans les Modifications : chaque retour client compte comme une nouvelle modif" },
   ];
 
   // Par client (période et fiche du haut)
@@ -235,6 +240,13 @@ export default function VueEnsemble({ dossiers, retours, verifications = [], opt
     parClient[k] = parClient[k] || { nv: 0, md: 0 };
     if (estNouveau(d)) parClient[k].nv += 1;
     else if (estModification(d)) parClient[k].md += 1;
+  }
+  // Chaque retour client compte comme une modif du client
+  for (const r of rsF) {
+    if (r.type !== "client" || !dansBornes(r.date, b)) continue;
+    const k = r.client || "Sans client";
+    parClient[k] = parClient[k] || { nv: 0, md: 0 };
+    parClient[k].md += 1;
   }
   const clients = Object.entries(parClient)
     .map(([nom, v]) => ({ nom, ...v }))

@@ -5,7 +5,9 @@ import KPICard from "@/components/KPICard";
 import Avatar from "@/components/ui/Avatar";
 import Icon from "@/components/ui/Icon";
 import { Badge } from "@/components/ui/StatutBadge";
-import { grouperParIngenieur, calculerStatsIngenieur, topCausesRetour, topCausesDepuisRetours } from "@/lib/scoring";
+import { topCausesDepuisRetours } from "@/lib/scoring";
+import { statsParIngenieur } from "@/lib/statsAgents";
+import { formatDuree } from "@/lib/constants";
 
 const TON_ATTEINTE = {
   Atteint: "green",
@@ -31,19 +33,12 @@ function Score({ valeur, max }) {
  * Rubrique « Statistiques agents » du Dashboard : scores qualité / productivité
  * par ingénieur, classement et top causes de retour, sur les dossiers filtrés.
  */
-export default function StatistiquesAgents({ dossiers: filtres_, objectifs, retours }) {
-  const parIngenieur = grouperParIngenieur(filtres_);
-  // Retours rattachés aux dossiers de la période filtrée
-  const idsFiltres = new Set(filtres_.map((d) => d.id));
-  const retoursFiltres = retours ? retours.filter((r) => idsFiltres.has(r.dossier_id)) : null;
-  const lignes = Object.entries(parIngenieur).map(([ingenieur, dossiersIng]) => ({
-    ingenieur,
-    stats: calculerStatsIngenieur(
-      dossiersIng,
-      objectifs[ingenieur],
-      retoursFiltres ? retoursFiltres.filter((r) => r.ingenieur === ingenieur) : undefined
-    ),
-  }));
+export default function StatistiquesAgents({ dossiersFiltres, traitements, filtres, objectifs, retours, noms }) {
+  // Un dossier compte le jour où il est audité ; chaque retour client = une modif ; les retours comptent le jour où ils sont faits
+  const lignes = statsParIngenieur({ dossiersFiltres, traitements, retours, filtres, objectifs, noms }).sort(
+    (x, y) => y.stats.dossierTraiteTotal - x.stats.dossierTraiteTotal || x.ingenieur.localeCompare(y.ingenieur)
+  );
+  const retoursFiltres = lignes.flatMap((l) => l.retours);
 
   const totalTraite = lignes.reduce((s, l) => s + l.stats.dossierTraiteTotal, 0);
   const totalRetInt = lignes.reduce((s, l) => s + l.stats.nbRetourInterne, 0);
@@ -54,7 +49,7 @@ export default function StatistiquesAgents({ dossiers: filtres_, objectifs, reto
   return (
     <>
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <KPICard label="Dossiers audités" value={totalTraite} accent="brand" icone="folder" />
+          <KPICard label="Dossiers traités" value={totalTraite} accent="brand" icone="folder" />
           <KPICard label="Retours internes" value={totalRetInt} accent="gold" icone="undo" />
           <KPICard label="Retours client" value={totalRetCli} accent="red" icone="building" />
           <KPICard label="Score global moyen" value={scoreMoyen ?? "—"} accent="green" icone="trophy" />
@@ -66,7 +61,7 @@ export default function StatistiquesAgents({ dossiers: filtres_, objectifs, reto
               <Icon name="users" size={15} className="text-ink/40" />
               Détail par ingénieur
             </p>
-            <span className="text-xs text-ink/45">Seuls les dossiers audités comptent · chaque retour compte · qualité /50, productivité /50</span>
+            <span className="text-xs text-ink/45">Comptés le jour de l’audit · chaque retour client = une modif · retours internes inclus · qualité /50, productivité /50</span>
           </div>
           <table className="table table-hover [&_td]:px-2.5 [&_th]:px-2.5 [&_th]:tracking-normal">
             <thead>
@@ -77,16 +72,16 @@ export default function StatistiquesAgents({ dossiers: filtres_, objectifs, reto
                 <th className="!text-right">Modif.</th>
                 <th className="!text-right">Total</th>
                 <th>Atteinte</th>
-                <th className="!text-right">Ret. int.</th>
-                <th className="!text-right">Ret. client</th>
-                <th className="!text-right">Délai moy.</th>
+                <th className="!text-right" title="Inclus dans le total">dont ret. int.</th>
+                <th className="!text-right" title="Inclus dans les modifs">dont ret. client</th>
+                <th className="!text-right" title="Temps passé par dossier, pauses exclues">Temps moy.</th>
                 <th className="!text-right">Qualité</th>
                 <th className="!text-right">Product.</th>
                 <th className="!text-right">Global</th>
               </tr>
             </thead>
             <tbody className="tabular">
-              {lignes.map(({ ingenieur, stats }) => (
+              {lignes.map(({ ingenieur, stats, objectif }) => (
                 <tr key={ingenieur}>
                   <td>
                     <span className="flex items-center gap-2 font-semibold capitalize whitespace-nowrap">
@@ -95,9 +90,7 @@ export default function StatistiquesAgents({ dossiers: filtres_, objectifs, reto
                     </span>
                   </td>
                   <td className="text-right text-ink/50">
-                    {objectifs[ingenieur]
-                      ? `${objectifs[ingenieur].objectif_nv_dossier}/${objectifs[ingenieur].objectif_modif}`
-                      : "—"}
+                    {objectif ? `${objectif.objectif_nv_dossier}/${objectif.objectif_modif}` : "—"}
                   </td>
                   <td className="text-right">{stats.nvDossierTraite}</td>
                   <td className="text-right">{stats.modifTraite}</td>
@@ -114,7 +107,7 @@ export default function StatistiquesAgents({ dossiers: filtres_, objectifs, reto
                     {stats.nbRetourClient}
                   </td>
                   <td className="text-right text-ink/65 whitespace-nowrap">
-                    {stats.delaiMoyenJours !== null ? `${stats.delaiMoyenJours.toFixed(1)} j` : "—"}
+                    {stats.tempsMoyenHeures !== null ? formatDuree(stats.tempsMoyenHeures) : "—"}
                   </td>
                   <td>
                     <Score valeur={stats.scoreQualite} max={50} />
@@ -144,7 +137,7 @@ export default function StatistiquesAgents({ dossiers: filtres_, objectifs, reto
 
         <div className="grid lg:grid-cols-2 gap-6">
           <Leaderboard classement={lignes} />
-          <TopCausesChart data={retoursFiltres ? topCausesDepuisRetours(retoursFiltres) : topCausesRetour(filtres_)} />
+          <TopCausesChart data={topCausesDepuisRetours(retoursFiltres)} />
         </div>
     </>
   );

@@ -1,4 +1,5 @@
 "use client";
+import { dateDerniereModif } from "@/lib/constants";
 import Icon from "@/components/ui/Icon";
 
 export const PERIODE_INITIALE = {
@@ -7,9 +8,9 @@ export const PERIODE_INITIALE = {
   mois: new Date().toISOString().slice(0, 7),
 };
 
-/** Le dossier (champ `date`) est-il dans la période choisie ? */
+/** Le dossier (date de dernière modification) est-il dans la période choisie ? */
 export function dansPeriode(d, periode) {
-  const dt = String(d.date || "").slice(0, 10);
+  const dt = dateDerniereModif(d);
   if (periode.mode === "aujourdhui") return dt === new Date().toISOString().slice(0, 10);
   if (periode.mode === "jour") return dt === periode.jour;
   if (periode.mode === "mois") return dt.slice(0, 7) === periode.mois;

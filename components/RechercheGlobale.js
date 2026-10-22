@@ -1,4 +1,5 @@
 "use client";
+import { dateDerniereModif, estRemodifie, formatDate } from "@/lib/constants";
 import { useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import HistoriqueComplet from "@/components/HistoriqueComplet";
@@ -35,14 +36,14 @@ export default function RechercheGlobale({ pleineLargeur = false }) {
     }
     let { data, error } = await supabase
       .from("dossiers")
-      .select("id, nom_dossier, ingenieur, nom_operation, etat, beneficiaire_nom")
+      .select("id, nom_dossier, ingenieur, nom_operation, etat, beneficiaire_nom, date, date_nouvelle_modification, date_retour_client")
       .or(conditions.join(","))
       .limit(8);
     if (error) {
       // migration v9 pas encore passée : recherche sur le nom seul
       ({ data } = await supabase
         .from("dossiers")
-        .select("id, nom_dossier, ingenieur, nom_operation, etat")
+        .select("id, nom_dossier, ingenieur, nom_operation, etat, date, date_retour_client")
         .ilike("nom_dossier", `%${t}%`)
         .limit(8));
     }
@@ -81,7 +82,7 @@ export default function RechercheGlobale({ pleineLargeur = false }) {
               <span className="min-w-0">
                 <span className="block text-sm font-semibold truncate">{d.nom_dossier}</span>
                 <span className="block text-xs text-ink/45 truncate">
-                  {[d.beneficiaire_nom, d.ingenieur, d.nom_operation].filter(Boolean).join(" · ")}
+                  {[dateDerniereModif(d) && `${estRemodifie(d) ? "modifié le" : "du"} ${formatDate(dateDerniereModif(d))}`, d.beneficiaire_nom, d.ingenieur, d.nom_operation].filter(Boolean).join(" · ")}
                 </span>
               </span>
               <StatutBadge etat={d.etat} />

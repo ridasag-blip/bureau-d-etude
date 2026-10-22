@@ -1,4 +1,5 @@
 "use client";
+import DateDossier from "@/components/ui/DateDossier";
 import StatutBadge, { Badge } from "@/components/ui/StatutBadge";
 import { formatDate, typeDernierRetour, TYPES_RETOUR, S } from "@/lib/constants";
 import Icon from "@/components/ui/Icon";
@@ -45,7 +46,7 @@ export default function DossierTable({ dossiers, onOpenDossier }) {
         <tbody>
           {dossiers.map((d) => (
             <tr key={d.id} className={onOpenDossier ? "cursor-pointer" : ""} onClick={() => onOpenDossier?.(d)}>
-              <td className="whitespace-nowrap text-ink/60 tabular">{formatDate(d.date)}</td>
+              <td className="whitespace-nowrap text-ink/60 tabular"><DateDossier dossier={d} /></td>
               <td>
                 <span className="nom-dossier-sm flex items-center gap-1.5">
                   {d.prioritaire && <Icon name="flame" size={13} className="text-isoRed" title="Prioritaire" />}
