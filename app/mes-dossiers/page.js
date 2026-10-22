@@ -1,6 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
+import DateDossier from "@/components/ui/DateDossier";
 import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import SelectionPersonne from "@/components/SelectionPersonne";
@@ -827,7 +828,7 @@ export default function MesDossiersPage() {
                   <tbody>
                     {traites.map((d) => (
                       <tr key={d.id} className="cursor-pointer" onClick={() => setDossierHistorique(d)}>
-                        <td className="whitespace-nowrap text-ink/60 tabular">{formatDate(d.date)}</td>
+                        <td className="whitespace-nowrap text-ink/60 tabular"><DateDossier dossier={d} /></td>
                         <td>
                           <span className="nom-dossier-sm">{d.nom_dossier}</span>
                           {d.etat === S.PAS_DE_MODIF && <span className="badge badge-green ml-1.5">Pas de modif</span>}

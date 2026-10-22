@@ -1,6 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
+import DateDossier from "@/components/ui/DateDossier";
 import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import HistoriqueComplet from "@/components/HistoriqueComplet";
@@ -24,7 +25,7 @@ import { useTempsReel, signalerMajDossiers } from "@/lib/useTempsReel";
 import { chargerVerifications, listeVerifications, serieDossiersAudites } from "@/lib/verifications";
 import { useValidateurActif } from "@/lib/useValidateurActif";
 import { supprimerDossierAvecTrace } from "@/lib/suppressionDossier";
-import { formatDate, formatDuree, S, STATUTS_MANUELS, TYPES_RETOUR, ETATS, rangsModifs, typeDernierRetour } from "@/lib/constants";
+import { formatDate, formatDuree, S, STATUTS_MANUELS, TYPES_RETOUR, ETATS, rangsModifs, typeDernierRetour, dateDerniereModif, estRemodifie } from "@/lib/constants";
 import { couleurEtat } from "@/lib/couleurs";
 import { enregistrerEvenement, annulerAction, instantane } from "@/lib/actions";
 import { heuresTraitement, heuresTraitementFini, figerTemps } from "@/lib/tempsTraitement";
@@ -322,6 +323,7 @@ export default function QualitePage() {
       dernier_retour_type: type,
       date_assignation: maintenant,
       date_verification: null,
+      date_nouvelle_modification: new Date().toLocaleDateString("sv-SE"), // le dossier apparaît à la date de ce retour
       ingenieur_modif: form.reassigner || null,
       nb_retours: (d.nb_retours || 0) + 1,
       ...(type === "client"
@@ -482,7 +484,7 @@ export default function QualitePage() {
     .filter(correspond)
     .sort(
       (a, b) =>
-        String(b.date || "").localeCompare(String(a.date || "")) ||
+        dateDerniereModif(b).localeCompare(dateDerniereModif(a)) ||
         String(b.created_at || "").localeCompare(String(a.created_at || ""))
     );
 
@@ -555,7 +557,7 @@ export default function QualitePage() {
               ["Fiche", d.nom_operation],
               ["Client", d.client],
               ["Ingénieur", d.ingenieur ? d.ingenieur + (d.ingenieur_modif && d.ingenieur_modif !== d.ingenieur ? ` (modif : ${d.ingenieur_modif})` : "") : null],
-              ["Date", formatDate(d.date)],
+              ...(estRemodifie(d) ? [["Dernière modif.", formatDate(dateDerniereModif(d))], ["Créé le", formatDate(d.date)]] : [["Date", formatDate(d.date)]]),
             ].map(([l, v]) => (
               <div key={l}>
                 <dt className="text-xs text-ink/45">{l}</dt>
@@ -1069,7 +1071,7 @@ export default function QualitePage() {
                           <PastilleEchanges resume={resumes[d.id]} de={[d.ingenieur, d.ingenieur_modif]} />
                         </span>
                         <span className="block text-xs text-ink/50 whitespace-nowrap truncate max-w-[220px]">
-                          {formatDate(d.date)}
+                          <DateDossier dossier={d} />
                           {d.beneficiaire_nom ? ` · ${d.beneficiaire_nom}` : ""}
                         </span>
                       </td>

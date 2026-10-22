@@ -9,7 +9,7 @@ import GraphiquePopup from "@/components/GraphiquePopup";
 import VueEnsemble from "@/components/VueEnsemble";
 import ProductionEnCeMoment, { FiltreEquipe } from "@/components/ProductionEnCeMoment";
 import FiltrePeriode, { FiltreFiche } from "@/components/FiltrePeriode";
-import { chargerVerifications, debutHistorique, listeVerifications } from "@/lib/verifications";
+import { chargerVerifications, debutHistorique, listeVerifications, listeTraitements, TYPES_VERIFICATION } from "@/lib/verifications";
 import PageHeader from "@/components/ui/PageHeader";
 import Icon from "@/components/ui/Icon";
 import { gardePage } from "@/components/ui/Screens";
@@ -70,7 +70,7 @@ export default function DashboardPage() {
       // Sans la migration v9, les statistiques retombent sur les anciens indicateurs.
       // Les retours annulés (erreur Qualité) ne comptent pas dans les statistiques
       setRetours(ret.error ? null : (ret.data || []).filter((r) => r.annule !== true));
-      setVerifs(await chargerVerifications(supabase, debutHistorique()));
+      setVerifs(await chargerVerifications(supabase, debutHistorique(), [...TYPES_VERIFICATION, "validation_ingenieur"]));
     }
   }
 
@@ -159,7 +159,14 @@ export default function DashboardPage() {
         {onglet === "stats" && (
           <>
             <FilterBar filtres={filtres} setFiltres={setFiltres} options={options} />
-            <StatistiquesAgents dossiers={filtres_} objectifs={objectifs} retours={retours} />
+            <StatistiquesAgents
+              dossiersFiltres={appliquerFiltres(dossiers, { ...filtres, mois: "Tous", annee: "Tous", du: "", au: "" })}
+              traitements={listeTraitements(dossiers, verifs)}
+              filtres={filtres}
+              objectifs={objectifs}
+              retours={retours}
+              noms={options.ingenieurs}
+            />
           </>
         )}
 

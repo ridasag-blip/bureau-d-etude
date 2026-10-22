@@ -1,6 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
+import DateDossier from "@/components/ui/DateDossier";
 import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import DossierFormSaisie from "@/components/DossierFormSaisie";
@@ -680,7 +681,7 @@ export default function SaisiePage() {
               <tbody>
                 {autres.map((d) => (
                   <tr key={d.id} className="cursor-pointer" onClick={() => ouvrirDossier(d)}>
-                    <td className="whitespace-nowrap text-ink/60 tabular">{formatDate(d.date)}</td>
+                    <td className="whitespace-nowrap text-ink/60 tabular"><DateDossier dossier={d} /></td>
                     <td>
                       <span className="nom-dossier-sm flex items-center gap-1.5">
                         {d.prioritaire && <Icon name="flame" size={13} className="text-isoRed" />}

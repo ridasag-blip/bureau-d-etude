@@ -2,6 +2,13 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.33 — date de dernière modification, comptage des retours, statistiques agents
+
+- **Date de dernière modification** : un dossier revenu en retour (interne ou client) apparaît dans les listes, la recherche, le filtre Date et l'export à la date de son dernier retour (mention « modifié », date de création en info-bulle et dans l'historique).
+- **Vue d'ensemble / Production par ingénieur** : chaque retour client compte comme une nouvelle modification (à la date du retour, pour l'ingénieur qui la traite). Les retours internes et client sont inclus (« dont ») : total = nouveaux dossiers + modifications.
+- **Statistiques agents** : un dossier compte le jour où il est traité (audité, ou corrigé et validé par l'ingénieur) ; chaque retour client traité = une modif ; une revérification après retour interne ne compte pas deux fois ; retours comptés le jour où ils sont faits, sans tenir compte des majuscules ; modif attribuée à l'ingénieur de modif ; « Délai moy. » remplacé par le temps moyen de traitement (pauses exclues).
+- **Migration V33** : remplit la date de dernière modification pour les retours déjà enregistrés.
+
 ## Version 3.32 — tuile « Retours à traiter »
 
 - Saisie : la tuile « Retours à reprendre » devient « Retours à traiter » : retours pas encore traités ou en cours de traitement (dans la file, à faire, en cours, en pause, en attente d'info), découpés retours internes / retours client.
