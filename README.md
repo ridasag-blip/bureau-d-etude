@@ -2,6 +2,15 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.34 — production, erreurs et score qualité + quantité
+
+- **Calcul commun** (lib/production.js) pour la Vue d'ensemble, la Production par ingénieur et les Statistiques agents.
+- **Production** : dossiers et modifs audités, comptés une seule fois le jour de l'audit, même après plusieurs retours internes ; chaque retour client traité = une modif de plus. Une modif compte comme un dossier.
+- **Erreurs** : chaque retour interne (avant ou après audit) compte, imputé à l'ingénieur qui a fait le travail (ingénieur de modif pour une modif). Retours levés exclus. Historique conservé.
+- **Vue d'ensemble** : tuiles Reçus (nouveaux / modifs), Audités (nouveaux / modifs), Retours internes (taux), Validés du 1er coup, Retours client.
+- **Production par ingénieur / Statistiques agents** : Nouveaux audités, Modifs auditées, Total audité, Retours internes, Dossiers avec retour, 1er coup %, Retours client, Temps moyen.
+- **Score /100** = Qualité /50 (50 × (1 − retours internes ÷ dossiers audités), chaque retour pénalise) + Quantité /50 (par rapport à l'objectif s'il est saisi, sinon au meilleur total de l'équipe).
+
 ## Version 3.33 — date de dernière modification, comptage des retours, statistiques agents
 
 - **Date de dernière modification** : un dossier revenu en retour (interne ou client) apparaît dans les listes, la recherche, le filtre Date et l'export à la date de son dernier retour (mention « modifié », date de création en info-bulle et dans l'historique).

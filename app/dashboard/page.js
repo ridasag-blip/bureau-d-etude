@@ -152,7 +152,7 @@ export default function DashboardPage() {
         </div>
 
 
-        {onglet === "apercu" && <VueEnsemble dossiers={dossiers} retours={retours} verifications={listeVerifications(dossiers, verifs)} options={options} periode={periode} fiche={fiche} />}
+        {onglet === "apercu" && <VueEnsemble dossiers={dossiers} retours={retours} traitements={listeTraitements(dossiers, verifs)} options={options} periode={periode} fiche={fiche} />}
 
         {onglet === "live" && <ProductionEnCeMoment dossiers={dossiers} verifications={listeVerifications(dossiers, verifs)} options={options} supabase={supabase} delaiMax={delaiMax} equipe={equipe} fiche={fiche} />}
 

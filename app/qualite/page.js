@@ -22,6 +22,7 @@ import { gardePage } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
 import { useRafraichissement } from "@/lib/useRafraichissement";
 import { useTempsReel, signalerMajDossiers } from "@/lib/useTempsReel";
+import { ingenieurResponsable } from "@/lib/rapportQualite";
 import { chargerVerifications, listeVerifications, serieDossiersAudites } from "@/lib/verifications";
 import { useValidateurActif } from "@/lib/useValidateurActif";
 import { supprimerDossierAvecTrace } from "@/lib/suppressionDossier";
@@ -344,7 +345,7 @@ export default function QualitePage() {
         type,
         cause: form.cause,
         commentaire: form.commentaire || null,
-        ingenieur: d.ingenieur,
+        ingenieur: ingenieurResponsable(d), // l'ingénieur qui a fait le travail (ingénieur de modif pour une modif)
         operation: d.nom_operation,
         effectue_par_nom: nomTrace,
         bibliotheque: form.bibliotheque,
