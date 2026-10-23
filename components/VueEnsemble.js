@@ -4,10 +4,11 @@ import TuilesCockpit from "@/components/TuilesCockpit";
 import FiltrePeriode from "@/components/FiltrePeriode";
 import Avatar from "@/components/ui/Avatar";
 import { S } from "@/lib/constants";
-import { serieCompte } from "@/lib/series";
+import { serieCompte, septJours, jourLocal } from "@/lib/series";
 import { bornes, bornesPrecedentes, dansBornes, libelleComparaison, libellePeriode } from "@/lib/periode";
 import { ingenieurResponsable } from "@/lib/rapportQualite";
-import { nbDossiersAudites, serieDossiersAudites } from "@/lib/verifications";
+import { construireBase, resumePeriode, parIngenieur } from "@/lib/production";
+import { formatDuree } from "@/lib/constants";
 
 export const C_NOUVEAU = "#1F6FA8";
 export const C_MODIF = "#E3A23B";
@@ -43,25 +44,6 @@ export function listeRetours(dossiers, retours) {
     if (d.retour_client) l.push({ type: "client", date: d.date_retour_client || d.date, ingenieur: ingenieurResponsable(d), operation: d.nom_operation, client: d.client });
   }
   return l;
-}
-
-/** Chiffres d'une période pour une fiche (ou toutes). */
-function chiffres(dossiers, retours, verifs, b, fiche) {
-  const ds = dossiers.filter((d) => d.etat !== "Annulé" && (fiche === "Tous" || d.nom_operation === fiche));
-  const rs = retours.filter((r) => (fiche === "Tous" || r.operation === fiche) && dansBornes(r.date, b));
-  const audites = ds.filter((d) => estAudite(d) && dansBornes(d.date_verification, b));
-  // Toutes les vérifications de la période (un dossier revenu et réaudité compte à chaque fois)
-  const vs = verifs.filter((v) => fiche === "Tous" || v.dossier?.nom_operation === fiche);
-  return {
-    nouveaux: ds.filter((d) => estNouveau(d) && dansBornes(d.date, b)).length,
-    // Modifs = modifications saisies + chaque retour client (une nouvelle modif à la date du retour)
-    modifs: ds.filter((d) => estModification(d) && dansBornes(d.date, b)).length + rs.filter((r) => r.type === "client").length,
-    // Dossiers réellement audités (qualification « Audité ») sur la période, chacun compté une fois
-    audites: nbDossiersAudites(vs, (date) => dansBornes(date, b)),
-    premierCoup: audites.length ? Math.round((audites.filter((d) => !d.nb_retours).length / audites.length) * 100) : null,
-    ri: rs.filter((r) => r.type === "interne").length,
-    rc: rs.filter((r) => r.type === "client").length,
-  };
 }
 
 function ecart(a, b, comp, baisseBonne = false) {
@@ -103,37 +85,18 @@ export function Legende() {
   );
 }
 
-/** Tableau « Production par ingénieur » avec son propre filtre (période + fiche). */
-function ProductionParIngenieur({ dossiers, retours, ingenieurs, operations, periodeHaut, ficheHaut }) {
+/** Tableau « Production par ingénieur » avec son propre filtre (période + fiche). Calcul commun : lib/production.js */
+function ProductionParIngenieur({ base, ingenieurs, operations, periodeHaut, ficheHaut }) {
   const [periode, setPeriode] = useState(null); // null = suit le filtre du haut
   const [fiche, setFiche] = useState(null);
   const p = periode || periodeHaut;
   const f = fiche || ficheHaut;
   const b = bornes(p);
-
-  const ds = dossiers.filter((d) => d.etat !== "Annulé" && (f === "Tous" || d.nom_operation === f) && dansBornes(d.date, b));
-  const rs = retours.filter((r) => (f === "Tous" || r.operation === f) && dansBornes(r.date, b));
-  const noms = new Map();
-  for (const n of ingenieurs) noms.set(String(n).trim().toLowerCase(), n);
-  for (const d of ds) {
-    const n = ingenieurResponsable(d);
-    if (n && n !== "—" && !noms.has(n.toLowerCase())) noms.set(n.toLowerCase(), n);
-  }
-  const lignes = [...noms.values()]
-    .map((n) => {
-      const siens = ds.filter((d) => nomEgal(ingenieurResponsable(d), n));
-      const r = rs.filter((x) => nomEgal(x.ingenieur, n));
-      return {
-        nom: n,
-        nv: siens.filter(estNouveau).length,
-        md: siens.filter(estModification).length + r.filter((x) => x.type === "client").length,
-        ri: r.filter((x) => x.type === "interne").length,
-        rc: r.filter((x) => x.type === "client").length,
-      };
-    })
-    .sort((x, y) => y.nv + y.md - (x.nv + x.md) || x.nom.localeCompare(y.nom));
-  const max = Math.max(1, ...lignes.map((l) => l.nv + l.md));
-  const tot = lignes.reduce((t, l) => ({ nv: t.nv + l.nv, md: t.md + l.md, ri: t.ri + l.ri, rc: t.rc + l.rc }), { nv: 0, md: 0, ri: 0, rc: 0 });
+  const ok = (d) => f === "Tous" || d?.nom_operation === f;
+  const lignes = parIngenieur(base, (date) => dansBornes(date, b), ok, ingenieurs).sort((x, y) => y.total - x.total || y.ri - x.ri || x.nom.localeCompare(y.nom));
+  const max = Math.max(1, ...lignes.map((l) => l.total));
+  const tot = lignes.reduce((t, l) => ({ nv: t.nv + l.nv, md: t.md + l.md, ri: t.ri + l.ri, ar: t.ar + l.dossiersAvecRetour, rc: t.rc + l.rc }), { nv: 0, md: 0, ri: 0, ar: 0, rc: 0 });
+  const r = resumePeriode(base, (date) => dansBornes(date, b), ok);
 
   return (
     <section className="card mb-6">
@@ -141,7 +104,7 @@ function ProductionParIngenieur({ dossiers, retours, ingenieurs, operations, per
         <div>
           <p className="card-title">Production par ingénieur</p>
           <p className="text-xs text-ink/50 mt-0.5 first-letter:uppercase">
-            {libellePeriode(p)} · {f === "Tous" ? "toutes les fiches" : f}
+            {libellePeriode(p)} · {f === "Tous" ? "toutes les fiches" : f} · dossiers et modifs audités, chaque retour interne compte
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -162,17 +125,20 @@ function ProductionParIngenieur({ dossiers, retours, ingenieurs, operations, per
           <thead>
             <tr>
               <th>Ingénieur</th>
-              <th className="text-right">Nouveaux dossiers</th>
-              <th className="text-right">Modifications</th>
-              <th className="text-right">dont retours internes</th>
-              <th className="text-right">dont retours client</th>
-              <th className="w-[28%]">Répartition</th>
-              <th className="text-right">Total</th>
+              <th className="text-right" title="Nouveaux dossiers audités">Nouveaux audités</th>
+              <th className="text-right" title="Une par modif, quel que soit le nombre de retours internes">Modifs auditées</th>
+              <th className="w-[18%]">Répartition</th>
+              <th className="text-right">Total audité</th>
+              <th className="text-right" title="Chaque retour interne compte (avant ou après audit)">Retours internes</th>
+              <th className="text-right" title="Dossiers ayant eu au moins un retour interne">Dossiers avec retour</th>
+              <th className="text-right" title="Dossiers audités sans aucun retour interne">1er coup</th>
+              <th className="text-right" title="Demandes du client (pas une faute)">Retours client</th>
+              <th className="text-right" title="Temps passé par dossier, pauses exclues">Temps moy.</th>
             </tr>
           </thead>
           <tbody>
             {lignes.map((l) => (
-              <tr key={l.nom}>
+              <tr key={l.cle}>
                 <td>
                   <span className="flex items-center gap-2.5 font-medium capitalize whitespace-nowrap">
                     <Avatar nom={l.nom} taille={26} />
@@ -181,17 +147,20 @@ function ProductionParIngenieur({ dossiers, retours, ingenieurs, operations, per
                 </td>
                 <td className="text-right tabular font-medium" style={{ color: C_NOUVEAU }}>{l.nv}</td>
                 <td className="text-right tabular font-medium" style={{ color: T_MODIF }}>{l.md}</td>
-                <td className="text-right tabular" style={{ color: l.ri ? C_RI : undefined }}>{l.ri}</td>
-                <td className="text-right tabular" style={{ color: l.rc ? C_RC : undefined }}>{l.rc}</td>
                 <td>
                   <Repartition a={l.nv} b={l.md} max={max} hauteur={14} />
                 </td>
-                <td className="text-right tabular font-semibold">{l.nv + l.md}</td>
+                <td className="text-right tabular font-semibold">{l.total}</td>
+                <td className="text-right tabular" style={{ color: l.ri ? C_RI : undefined, fontWeight: l.ri ? 600 : undefined }}>{l.ri}</td>
+                <td className="text-right tabular text-ink/65">{l.dossiersAvecRetour}</td>
+                <td className="text-right tabular whitespace-nowrap">{l.premierCoup === null ? "—" : `${l.premierCoup} %`}</td>
+                <td className="text-right tabular" style={{ color: l.rc ? C_RC : undefined }}>{l.rc}</td>
+                <td className="text-right tabular whitespace-nowrap text-ink/65">{l.tempsMoyen === null ? "—" : formatDuree(l.tempsMoyen)}</td>
               </tr>
             ))}
             {lignes.length === 0 && (
               <tr>
-                <td colSpan={7} className="table-empty">
+                <td colSpan={10} className="table-empty">
                   Aucune production sur cette période.
                 </td>
               </tr>
@@ -201,10 +170,13 @@ function ProductionParIngenieur({ dossiers, retours, ingenieurs, operations, per
                 <td>Équipe</td>
                 <td className="text-right tabular" style={{ color: C_NOUVEAU }}>{nf(tot.nv)}</td>
                 <td className="text-right tabular" style={{ color: T_MODIF }}>{nf(tot.md)}</td>
-                <td className="text-right tabular" style={{ color: C_RI }}>{nf(tot.ri)}</td>
-                <td className="text-right tabular" style={{ color: C_RC }}>{nf(tot.rc)}</td>
                 <td />
                 <td className="text-right tabular">{nf(tot.nv + tot.md)}</td>
+                <td className="text-right tabular" style={{ color: C_RI }}>{nf(tot.ri)}</td>
+                <td className="text-right tabular">{nf(tot.ar)}</td>
+                <td className="text-right tabular">{r.premierCoup === null ? "—" : `${r.premierCoup} %`}</td>
+                <td className="text-right tabular" style={{ color: C_RC }}>{nf(tot.rc)}</td>
+                <td />
               </tr>
             )}
           </tbody>
@@ -215,21 +187,52 @@ function ProductionParIngenieur({ dossiers, retours, ingenieurs, operations, per
 }
 
 /** Onglet « Vue d'ensemble » : 5 tuiles, production par ingénieur, volume par client. */
-export default function VueEnsemble({ dossiers, retours, verifications = [], options, periode, fiche }) {
+export default function VueEnsemble({ dossiers, retours, traitements = [], options, periode, fiche }) {
   const rets = listeRetours(dossiers, retours);
+  const base = construireBase(dossiers, traitements, retours || []);
   const b = bornes(periode);
-  const c = chiffres(dossiers, rets, verifications, b, fiche);
-  const avant = chiffres(dossiers, rets, verifications, bornesPrecedentes(periode), fiche);
+  const ok = (d) => fiche === "Tous" || d?.nom_operation === fiche;
+  const c = resumePeriode(base, (date) => dansBornes(date, b), ok);
+  const avant = resumePeriode(base, (date) => dansBornes(date, bornesPrecedentes(periode)), ok);
   const comp = libelleComparaison(periode);
-  const dsF = dossiers.filter((d) => d.etat !== "Annulé" && (fiche === "Tous" || d.nom_operation === fiche));
+  const dsF = dossiers.filter((d) => d.etat !== "Annulé" && ok(d));
   const rsF = rets.filter((r) => fiche === "Tous" || r.operation === fiche);
 
+  // Mini graphiques des 7 derniers jours
+  const jours7 = septJours();
+  const parJour = (fn) => jours7.map((j) => fn((date) => jourLocal(date) === j));
+  const serieRecus = parJour((dans) => { const x = resumePeriode(base, dans, ok); return x.recus.nv + x.recus.md; });
+  const serieAudites = parJour((dans) => resumePeriode(base, dans, ok).audites.total);
+  const seriePc = parJour((dans) => resumePeriode(base, dans, ok).premierCoup ?? 0);
+  const totRecus = c.recus.nv + c.recus.md;
+
   const tuiles = [
-    { label: "Nouveaux dossiers", valeur: nf(c.nouveaux), ...ecart(c.nouveaux, avant.nouveaux, comp), serie: serieCompte(dsF, "date", estNouveau), couleur: C_NOUVEAU, couleurSerie: ["#BBD4EA", C_NOUVEAU], actif: true },
-    { label: "Modifications", valeur: nf(c.modifs), ...ecart(c.modifs, avant.modifs, comp, true), serie: (() => { const a = serieCompte(dsF, "date", estModification), r = serieCompte(rsF, "date", (x) => x.type === "client"); return a.map((v, i) => v + r[i]); })(), couleur: T_MODIF, couleurSerie: ["#F2D9AE", C_MODIF], aide: "Modifications saisies + chaque retour client (compté comme une nouvelle modif à la date du retour)" },
-    { label: "Audités", valeur: nf(c.audites), note: c.premierCoup === null ? "" : `${c.premierCoup} % du 1er coup`, ton: "vert", serie: serieDossiersAudites(verifications.filter((v) => fiche === "Tous" || v.dossier?.nom_operation === fiche)), couleur: C_AUDIT, aide: "Dossiers dont le statut est « Audité », audités par la Qualité sur la période", couleurSerie: ["#C7E1BF", C_AUDIT] },
-    { label: "Retours internes", valeur: nf(c.ri), ...ecart(c.ri, avant.ri, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "interne"), couleur: C_RI, couleurSerie: ["#EBD7AE", C_RI], aide: "Inclus dans les dossiers et modifs : un retour interne ne crée pas de nouvelle unité" },
-    { label: "Retours client", valeur: nf(c.rc), ...ecart(c.rc, avant.rc, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "client"), couleur: C_RC, couleurSerie: ["#F1C9C5", C_RC], aide: "Inclus dans les Modifications : chaque retour client compte comme une nouvelle modif" },
+    {
+      label: "Reçus",
+      split: [
+        { label: "nouveaux", valeur: nf(c.recus.nv), couleur: C_NOUVEAU },
+        { label: "modifs", valeur: nf(c.recus.md), couleur: T_MODIF },
+      ],
+      ...ecart(totRecus, avant.recus.nv + avant.recus.md, comp),
+      serie: serieRecus,
+      couleurSerie: ["#BBD4EA", C_NOUVEAU],
+      actif: true,
+      aide: "Travail reçu : nouveaux dossiers créés, modifs saisies et retours client (une modif chacun), le jour de la demande",
+    },
+    {
+      label: "Audités",
+      split: [
+        { label: "nouveaux", valeur: nf(c.audites.nv), couleur: C_NOUVEAU },
+        { label: "modifs", valeur: nf(c.audites.md), couleur: T_MODIF },
+      ],
+      ...ecart(c.audites.total, avant.audites.total, comp),
+      serie: serieAudites,
+      couleurSerie: ["#C7E1BF", C_AUDIT],
+      aide: "Production : dossiers et modifs audités, comptés une fois le jour de l'audit, même après plusieurs retours internes",
+    },
+    { label: "Retours internes", valeur: nf(c.ri), note: c.tauxRI === null ? ecart(c.ri, avant.ri, comp, true).note : `${c.tauxRI} % des audités`, ton: c.ri ? "rouge" : "vert", serie: serieCompte(rsF, "date", (r) => r.type === "interne"), couleur: C_RI, couleurSerie: ["#EBD7AE", C_RI], aide: "Erreurs : chaque retour interne compte (avant ou après audit), imputé à l'ingénieur" },
+    { label: "Validés du 1er coup", valeur: c.premierCoup === null ? "—" : `${c.premierCoup} %`, note: c.audites.total ? `${c.audites.total} audité(s)` : "", ton: "neutre", serie: seriePc, couleur: C_AUDIT, couleurSerie: ["#C7E1BF", C_AUDIT], aide: "Part des dossiers audités sans aucun retour interne" },
+    { label: "Retours client", valeur: nf(c.rc), ...ecart(c.rc, avant.rc, comp, true), serie: serieCompte(rsF, "date", (r) => r.type === "client"), couleur: C_RC, couleurSerie: ["#F1C9C5", C_RC], aide: "Demandes du client : chacune devient une modif à traiter" },
   ];
 
   // Par client (période et fiche du haut)
@@ -259,8 +262,7 @@ export default function VueEnsemble({ dossiers, retours, verifications = [], opt
       <TuilesCockpit cinq items={tuiles} />
 
       <ProductionParIngenieur
-        dossiers={dossiers}
-        retours={rets}
+        base={base}
         ingenieurs={options.ingenieursAssignables?.length ? options.ingenieursAssignables : options.ingenieurs}
         operations={options.operations}
         periodeHaut={periode}

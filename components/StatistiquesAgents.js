@@ -4,7 +4,6 @@ import TopCausesChart from "@/components/TopCausesChart";
 import KPICard from "@/components/KPICard";
 import Avatar from "@/components/ui/Avatar";
 import Icon from "@/components/ui/Icon";
-import { Badge } from "@/components/ui/StatutBadge";
 import { topCausesDepuisRetours } from "@/lib/scoring";
 import { statsParIngenieur } from "@/lib/statsAgents";
 import { formatDuree } from "@/lib/constants";
@@ -61,22 +60,23 @@ export default function StatistiquesAgents({ dossiersFiltres, traitements, filtr
               <Icon name="users" size={15} className="text-ink/40" />
               Détail par ingénieur
             </p>
-            <span className="text-xs text-ink/45">Comptés le jour de l’audit · chaque retour client = une modif · retours internes inclus · qualité /50, productivité /50</span>
+            <span className="text-xs text-ink/45">Comptés le jour de l’audit · 1 modif = 1 dossier · chaque retour interne pénalise · qualité /50 + quantité /50</span>
           </div>
           <table className="table table-hover [&_td]:px-2.5 [&_th]:px-2.5 [&_th]:tracking-normal">
             <thead>
               <tr>
                 <th>Ingénieur</th>
                 <th className="!text-right">Objectif</th>
-                <th className="!text-right">Nv. dossier</th>
-                <th className="!text-right">Modif.</th>
-                <th className="!text-right">Total</th>
-                <th>Atteinte</th>
-                <th className="!text-right" title="Inclus dans le total">dont ret. int.</th>
-                <th className="!text-right" title="Inclus dans les modifs">dont ret. client</th>
+                <th className="!text-right" title="Nouveaux dossiers audités">Nouveaux</th>
+                <th className="!text-right" title="Modifs auditées (une par modif, quel que soit le nombre de retours)">Modifs</th>
+                <th className="!text-right">Total audité</th>
+                <th className="!text-right" title="Chaque retour interne compte (avant ou après audit)">Ret. int.</th>
+                <th className="!text-right" title="Dossiers ayant eu au moins un retour interne">Dossiers avec retour</th>
+                <th className="!text-right" title="Dossiers audités sans aucun retour interne">1er coup</th>
+                <th className="!text-right" title="Demandes du client (pas une faute)">Ret. client</th>
                 <th className="!text-right" title="Temps passé par dossier, pauses exclues">Temps moy.</th>
                 <th className="!text-right">Qualité</th>
-                <th className="!text-right">Product.</th>
+                <th className="!text-right" title="Par rapport à l'objectif s'il est saisi, sinon au meilleur total de l'équipe">Quantité</th>
                 <th className="!text-right">Global</th>
               </tr>
             </thead>
@@ -95,14 +95,11 @@ export default function StatistiquesAgents({ dossiersFiltres, traitements, filtr
                   <td className="text-right">{stats.nvDossierTraite}</td>
                   <td className="text-right">{stats.modifTraite}</td>
                   <td className="text-right font-semibold">{stats.dossierTraiteTotal}</td>
-                  <td>
-                    <Badge ton={TON_ATTEINTE[stats.statutAtteinte] || "neutral"} dot>
-                      {stats.statutAtteinte}
-                    </Badge>
-                  </td>
                   <td className={`text-right ${stats.nbRetourInterne ? "text-isoGold-dark font-semibold" : "text-ink/40"}`}>
                     {stats.nbRetourInterne}
                   </td>
+                  <td className="text-right text-ink/65">{stats.dossiersAvecRetour}</td>
+                  <td className="text-right whitespace-nowrap">{stats.premierCoup === null ? "—" : `${stats.premierCoup} %`}</td>
                   <td className={`text-right ${stats.nbRetourClient ? "text-isoRed-dark font-semibold" : "text-ink/40"}`}>
                     {stats.nbRetourClient}
                   </td>
@@ -113,7 +110,7 @@ export default function StatistiquesAgents({ dossiersFiltres, traitements, filtr
                     <Score valeur={stats.scoreQualite} max={50} />
                   </td>
                   <td>
-                    <Score valeur={stats.scoreProductivite} max={50} />
+                    <Score valeur={stats.scoreQuantite} max={50} />
                   </td>
                   <td className="text-right">
                     {stats.scoreGlobal !== null ? (
@@ -128,7 +125,7 @@ export default function StatistiquesAgents({ dossiersFiltres, traitements, filtr
               ))}
               {lignes.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="table-empty">Aucune donnée pour ces filtres.</td>
+                  <td colSpan={13} className="table-empty">Aucune donnée pour ces filtres.</td>
                 </tr>
               )}
             </tbody>
