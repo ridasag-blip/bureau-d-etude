@@ -86,7 +86,8 @@ export function Legende() {
 }
 
 /** Tableau « Production par ingénieur » avec son propre filtre (période + fiche). Calcul commun : lib/production.js */
-function ProductionParIngenieur({ base, ingenieurs, operations, periodeHaut, ficheHaut }) {
+function ProductionParIngenieur({ base, ingenieurs, operations, periodeHaut, ficheHaut, qualite = [] }) {
+  const estQualite = (n) => qualite.some((q) => String(q).trim().toLowerCase() === String(n || "").trim().toLowerCase());
   const [periode, setPeriode] = useState(null); // null = suit le filtre du haut
   const [fiche, setFiche] = useState(null);
   const p = periode || periodeHaut;
@@ -143,6 +144,7 @@ function ProductionParIngenieur({ base, ingenieurs, operations, periodeHaut, fic
                   <span className="flex items-center gap-2.5 font-medium capitalize whitespace-nowrap">
                     <Avatar nom={l.nom} taille={26} />
                     {l.nom}
+                    {estQualite(l.nom) && <span className="badge badge-green text-[10px] ml-1" title="Service qualité qui traite aussi des dossiers">Qualité</span>}
                   </span>
                 </td>
                 <td className="text-right tabular font-medium" style={{ color: C_NOUVEAU }}>{l.nv}</td>
@@ -264,6 +266,7 @@ export default function VueEnsemble({ dossiers, retours, traitements = [], optio
       <ProductionParIngenieur
         base={base}
         ingenieurs={options.ingenieursAssignables?.length ? options.ingenieursAssignables : options.ingenieurs}
+        qualite={options.validateurs}
         operations={options.operations}
         periodeHaut={periode}
         ficheHaut={fiche}

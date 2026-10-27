@@ -311,6 +311,16 @@ export default function GestionComptes({ supabase }) {
     }
   }
 
+  // Compte Qualité : peut aussi traiter des dossiers (comme un ingénieur)
+  async function basculerTraite(compte, oui) {
+    try {
+      await appelApi(supabase, "PATCH", { id: compte.id, traiteDossiers: oui });
+      charger();
+    } catch (e) {
+      alert("Erreur : " + e.message);
+    }
+  }
+
   async function basculerActif(compte) {
     const desactiver = compte.actif !== false;
     if (desactiver && !confirm(`Désactiver le compte ${identifiant(compte)} ? La personne ne pourra plus se connecter (vous pourrez le réactiver à tout moment).`)) return;
@@ -712,7 +722,13 @@ export default function GestionComptes({ supabase }) {
                     </select>
                   </td>
                   <td>
-                    {c.role !== "ingenieur" ? (
+                    {c.role === "qualite" ? (
+                      <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer" title="La personne voit aussi « Mes dossiers » et peut recevoir des dossiers à traiter. Elle peut aussi auditer ses propres dossiers.">
+                        <input type="checkbox" className="w-4 h-4" checked={!!c.traite_dossiers} onChange={(e) => basculerTraite(c, e.target.checked)} />
+                        Traite aussi des dossiers
+                        {c.traite_dossiers && c.ingenieur_ref && <span className="text-ink/45">({c.ingenieur_ref})</span>}
+                      </label>
+                    ) : c.role !== "ingenieur" ? (
                       <span className="text-ink/35">—</span>
                     ) : enEdition ? (
                       <select className="input input-sm w-44" value={edition.ingenieurRef} onChange={(e) => setEdition((x) => ({ ...x, ingenieurRef: e.target.value }))}>

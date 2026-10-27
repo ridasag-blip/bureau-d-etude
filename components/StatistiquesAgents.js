@@ -32,7 +32,8 @@ function Score({ valeur, max }) {
  * Rubrique « Statistiques agents » du Dashboard : scores qualité / productivité
  * par ingénieur, classement et top causes de retour, sur les dossiers filtrés.
  */
-export default function StatistiquesAgents({ dossiersFiltres, traitements, filtres, objectifs, retours, noms }) {
+export default function StatistiquesAgents({ dossiersFiltres, traitements, filtres, objectifs, retours, noms, qualite = [] }) {
+  const estQualite = (n) => qualite.some((q) => String(q).trim().toLowerCase() === String(n || "").trim().toLowerCase());
   // Un dossier compte le jour où il est audité ; chaque retour client = une modif ; les retours comptent le jour où ils sont faits
   const lignes = statsParIngenieur({ dossiersFiltres, traitements, retours, filtres, objectifs, noms }).sort(
     (x, y) => y.stats.dossierTraiteTotal - x.stats.dossierTraiteTotal || x.ingenieur.localeCompare(y.ingenieur)
@@ -87,6 +88,7 @@ export default function StatistiquesAgents({ dossiersFiltres, traitements, filtr
                     <span className="flex items-center gap-2 font-semibold capitalize whitespace-nowrap">
                       <Avatar nom={ingenieur} taille={26} />
                       {ingenieur}
+                      {estQualite(ingenieur) && <span className="badge badge-green text-[10px] ml-1" title="Service qualité qui traite aussi des dossiers">Qualité</span>}
                     </span>
                   </td>
                   <td className="text-right text-ink/50">

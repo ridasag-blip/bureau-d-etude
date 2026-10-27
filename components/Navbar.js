@@ -28,6 +28,7 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
   const router = useRouter();
   const [enAttente, setEnAttente] = useState(null);
   const [fonction, setFonction] = useState(null); // null = pas encore lu ; "" = admin principal
+  const [traiteDossiers, setTraiteDossiers] = useState(false); // compte Qualité qui traite aussi des dossiers
   const [nonLus, setNonLus] = useState(0);
   const [menuMobile, setMenuMobile] = useState(false);
   const [menuUtilisateur, setMenuUtilisateur] = useState(false);
@@ -61,12 +62,17 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
   useTempsReel(supabaseNav.current, ["dossiers"], majEnAttente, estStaff);
 
   useEffect(() => {
-    if (role !== "admin") return;
+    if (role !== "admin" && role !== "qualite") return;
     (async () => {
       const { data: u } = await supabaseNav.current.auth.getUser();
       if (!u?.user) return;
-      const { data, error } = await supabaseNav.current.from("profiles").select("fonction").eq("id", u.user.id).maybeSingle();
-      setFonction(error ? "" : data?.fonction === "Responsable" ? "Responsable" : "");
+      if (role === "admin") {
+        const { data, error } = await supabaseNav.current.from("profiles").select("fonction").eq("id", u.user.id).maybeSingle();
+        setFonction(error ? "" : data?.fonction === "Responsable" ? "Responsable" : "");
+      } else {
+        const { data, error } = await supabaseNav.current.from("profiles").select("traite_dossiers").eq("id", u.user.id).maybeSingle();
+        setTraiteDossiers(!error && !!data?.traite_dossiers);
+      }
     })();
   }, [role]);
 
@@ -124,7 +130,9 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
   }
 
   // Export et Facturation : administrateur principal seulement (pas les Responsables)
-  const liens = LINKS.filter((l) => l.roles.includes(role) && (!l.superviseur || fonction === ""));
+  const liens = LINKS.filter(
+    (l) => (l.roles.includes(role) || (l.href === "/mes-dossiers" && role === "qualite" && traiteDossiers)) && (!l.superviseur || fonction === "")
+  );
 
   function lien(l, mobile) {
     const actif = pathname?.startsWith(l.href);
