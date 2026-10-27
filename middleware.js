@@ -56,7 +56,8 @@ export async function middleware(request) {
 
   if (user) {
     // « fonction » n'existe qu'après la migration V18 : on se replie sur « role » seul si besoin
-    let { data: profile, error: errProfil } = await supabase.from("profiles").select("role, fonction").eq("id", user.id).single();
+    let { data: profile, error: errProfil } = await supabase.from("profiles").select("role, fonction, traite_dossiers").eq("id", user.id).single();
+    if (errProfil) ({ data: profile, error: errProfil } = await supabase.from("profiles").select("role, fonction").eq("id", user.id).single());
     if (errProfil) ({ data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single());
 
     const role = profile?.role;
@@ -80,7 +81,8 @@ export async function middleware(request) {
       return NextResponse.redirect(url);
     }
 
-    if (ROUTES_INGENIEUR_ONLY.some((r) => path.startsWith(r)) && role !== "ingenieur" && role !== "admin") {
+    // « Mes dossiers » : ingénieurs, admin, et comptes Qualité qui traitent aussi des dossiers
+    if (ROUTES_INGENIEUR_ONLY.some((r) => path.startsWith(r)) && role !== "ingenieur" && role !== "admin" && !(role === "qualite" && profile?.traite_dossiers)) {
       const url = request.nextUrl.clone();
       url.pathname = accueilPour(role);
       return NextResponse.redirect(url);

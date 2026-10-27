@@ -59,7 +59,8 @@ export default function MesDossiersPage() {
   // Chaque ingénieur se connecte avec son propre compte (plus de code PIN) ;
   // seul l'admin choisit l'ingénieur dont il veut voir l'écran.
   const estAdmin = profile?.role === "admin";
-  const nom = estAdmin ? choix.nom : profile?.ingenieur_ref || null;
+  // Compte Qualité qui traite aussi des dossiers : il travaille sous son nom d'ingénieur (ou son nom complet)
+  const nom = estAdmin ? choix.nom : profile?.ingenieur_ref || (profile?.role === "qualite" && profile?.traite_dossiers ? profile?.nom_complet : null) || null;
   const pret = estAdmin ? choix.pret : true;
   const selectionner = choix.selectionner;
   const changerDePersonne = estAdmin ? choix.changerDePersonne : undefined;

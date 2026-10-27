@@ -76,7 +76,20 @@ async function ecrireProfil(client, ligne, existe) {
     const { fonction, ...sans } = ligne;
     ({ error } = await tenter(sans));
   }
+  if (error && /traite_dossiers/.test(error.message)) {
+    return { message: "La case « Peut aussi traiter des dossiers » demande la migration V34 : exécutez-la dans Supabase." };
+  }
   return error;
+}
+
+/** Un compte Qualité qui traite des dossiers doit figurer dans la liste des ingénieurs (attribution des dossiers). */
+async function ajouterIngenieur(client, nom) {
+  const { data: existe } = await client.from("parametres_ingenieurs").select("id, actif").ilike("nom", nom).maybeSingle();
+  if (existe) {
+    if (existe.actif === false) await client.from("parametres_ingenieurs").update({ actif: true }).eq("id", existe.id);
+    return;
+  }
+  await client.from("parametres_ingenieurs").insert({ nom, actif: true });
 }
 
 /** Un compte Qualité doit figurer dans la liste « Service qualité » (pour « Audité par »). */
@@ -121,6 +134,7 @@ export async function GET(request) {
       role: p?.role || null,
       fonction: p?.fonction || null,
       ingenieur_ref: p?.ingenieur_ref || null,
+      traite_dossiers: !!p?.traite_dossiers,
       mot_de_passe: motsDePasse.get(u.id) || null,
       actif: estActif(u),
       created_at: u.created_at,
@@ -217,7 +231,7 @@ export async function PATCH(request) {
 }
 
 async function modifier(request, admin) {
-  const { id, nouveauMotDePasse, role, nomComplet, nomUtilisateur, ingenieurRef, actif } = await request.json();
+  const { id, nouveauMotDePasse, role, nomComplet, nomUtilisateur, ingenieurRef, actif, traiteDossiers } = await request.json();
   if (!id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
   const soiMeme = admin?.id === id;
   if (soiMeme && actif === false) return NextResponse.json({ error: "Vous ne pouvez pas désactiver votre propre compte." }, { status: 400 });
@@ -245,7 +259,20 @@ async function modifier(request, admin) {
     if (!rf) return NextResponse.json({ error: "Rôle inconnu" }, { status: 400 });
     maj.role = rf.role;
     maj.fonction = rf.fonction;
-    if (rf.role !== "ingenieur") maj.ingenieur_ref = null;
+    if (rf.role !== "ingenieur" && !(rf.role === "qualite" && avant?.traite_dossiers)) maj.ingenieur_ref = null;
+    if (rf.role !== "qualite") maj.traite_dossiers = false;
+  }
+  // Compte Qualité qui traite aussi des dossiers : il a un nom d'ingénieur (celui de son nom complet)
+  if (traiteDossiers === true || traiteDossiers === false) {
+    maj.traite_dossiers = traiteDossiers;
+    const nomIng = String(avant?.ingenieur_ref || maj.nom_complet || avant?.nom_complet || "").trim();
+    if (traiteDossiers) {
+      if (!nomIng) return NextResponse.json({ error: "Donnez d'abord un nom complet à ce compte." }, { status: 400 });
+      maj.ingenieur_ref = nomIng;
+      await ajouterIngenieur(client, nomIng);
+    } else {
+      maj.ingenieur_ref = null;
+    }
   }
   if (nomComplet !== undefined && nomComplet !== null) maj.nom_complet = String(nomComplet).trim() || avant?.nom_complet;
   if (ingenieurRef !== undefined) maj.ingenieur_ref = ingenieurRef ? String(ingenieurRef).trim() : null;

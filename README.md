@@ -2,6 +2,13 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.35 — un compte Qualité peut aussi traiter des dossiers
+
+- Paramètres → Comptes : case « Traite aussi des dossiers » sur un compte Qualité. La personne est ajoutée à la liste des ingénieurs, voit « Mes dossiers », peut recevoir des dossiers (Saisie, « Réassigner à ») ou prendre le suivant selon ses habilitations, et sa connexion est visible comme celle d'un ingénieur.
+- Elle garde tous ses droits Qualité (elle peut aussi auditer ses propres dossiers).
+- Sa production compte dans Production par ingénieur et Statistiques agents, avec la mention « Qualité » ; ses contrôles restent dans « Mes contrôles ».
+- Migration V34 : colonne profiles.traite_dossiers, listes d'attribution et présence.
+
 ## Version 3.34 — production, erreurs et score qualité + quantité
 
 - **Calcul commun** (lib/production.js) pour la Vue d'ensemble, la Production par ingénieur et les Statistiques agents.

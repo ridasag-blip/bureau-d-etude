@@ -166,6 +166,7 @@ export default function DashboardPage() {
               objectifs={objectifs}
               retours={retours}
               noms={options.ingenieurs}
+              qualite={options.validateurs}
             />
           </>
         )}
