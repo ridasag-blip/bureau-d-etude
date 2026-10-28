@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
+import { grouperPassages, regrouperLignes, infoPassages, nomAffiche } from "@/lib/regroupement";
+import { dateDerniereModif } from "@/lib/constants";
 import Navbar from "@/components/Navbar";
 import FilterBar from "@/components/FilterBar";
 import DossierTable from "@/components/DossierTable";
@@ -18,7 +20,7 @@ export default function ExportPage() {
     useValidateurActif(profile, supabase);
   const estAdmin = profile?.role === "admin";
   // Admin et Qualité ont chacun leur propre compte : pas de code PIN
-  const nominatif = ["admin", "qualite"].includes(profile?.role);
+  const nominatif = ["admin", "qualite", "lecteur"].includes(profile?.role);
   const nomActif = nominatif ? profile?.nom_complet : nomSelectionne;
   const [dossiers, setDossiers] = useState([]);
   const [filtres, setFiltres] = useState(FILTRES_INITIAUX);
@@ -35,8 +37,9 @@ export default function ExportPage() {
   const filtres_ = appliquerFiltres(dossiers, filtres);
 
   function exporterExcel() {
-    const feuille = XLSX.utils.json_to_sheet(
-      filtres_.map((d) => ({
+    // Feuille 1 : une ligne par dossier (passages regroupés : même nom, client, fiche). Feuille 2 : chaque passage.
+    const groupes = grouperPassages(dossiers);
+    const ligne = (d) => ({
         Date: d.date,
         "Nom dossier": d.nom_dossier,
         Ingénieur: d.ingenieur,
@@ -63,10 +66,21 @@ export default function ExportPage() {
               Téléphone: d.beneficiaire_telephone,
             }
           : {}),
-      }))
-    );
+      });
+    const parDossier = regrouperLignes(filtres_).map((d) => {
+      const info = infoPassages(d, groupes);
+      return {
+        ...ligne(d),
+        "Nom dossier": nomAffiche(d),
+        "Dernière modification": dateDerniereModif(d),
+        "Nb passages": info.n,
+        Versions: info.versions,
+        "Ingénieurs (tous les passages)": [...new Set(info.passages.map((p) => p.ingenieur_modif || p.ingenieur).filter(Boolean))].join(", "),
+      };
+    });
     const classeur = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(classeur, feuille, "Export");
+    XLSX.utils.book_append_sheet(classeur, XLSX.utils.json_to_sheet(parDossier), "Dossiers");
+    XLSX.utils.book_append_sheet(classeur, XLSX.utils.json_to_sheet(filtres_.map(ligne)), "Détail des passages");
     XLSX.writeFile(classeur, `HILLSOLUTION_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
@@ -92,7 +106,7 @@ export default function ExportPage() {
                 />
                 Inclure les coordonnées
               </label>
-              <button onClick={exporterExcel} className="btn-primary" disabled={filtres_.length === 0}>
+              <button onClick={exporterExcel} data-lecture className="btn-primary" disabled={filtres_.length === 0}>
                 <Icon name="download" size={16} />
                 Exporter {filtres_.length} dossier{filtres_.length > 1 ? "s" : ""}
               </button>

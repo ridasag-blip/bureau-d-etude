@@ -4,9 +4,12 @@ export const dynamic = "force-dynamic";
 import DateDossier from "@/components/ui/DateDossier";
 import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
-import DossierFormSaisie from "@/components/DossierFormSaisie";
+import DossierFormSaisie, { departVersion } from "@/components/DossierFormSaisie";
 import CommentThread from "@/components/CommentThread";
 import HistoriqueDossier from "@/components/HistoriqueDossier";
+import HistoriqueComplet from "@/components/HistoriqueComplet";
+import { grouperPassages, regrouperLignes, infoPassages, nomAffiche } from "@/lib/regroupement";
+import { BasculePassages, BasculeMulti, PastillePassages } from "@/components/Passages";
 import ObjectifJour from "@/components/ObjectifJour";
 import PageHeader, { SectionTitle } from "@/components/ui/PageHeader";
 import Modal from "@/components/ui/Modal";
@@ -47,15 +50,19 @@ export default function SaisiePage() {
     useValidateurActif(profile, supabase);
   const estAdmin = profile?.role === "admin";
   // Admin et Qualité ont chacun leur propre compte : pas de code PIN
-  const nominatif = ["admin", "qualite"].includes(profile?.role);
+  const nominatif = ["admin", "qualite", "lecteur"].includes(profile?.role);
+  const lecteur = profile?.role === "lecteur"; // compte Visualisation : consultation seulement
   const nomActif = nominatif ? profile?.nom_complet : nomSelectionne;
   const nomTrace = nomActif || null;
   const [ficheBarre, setFicheBarre] = useState("Tous"); // filtre opération de la barre de chiffres
   const [dossiers, setDossiers] = useState([]);
   const [dossierOuvert, setDossierOuvert] = useState(null);
+  const [voirPassages, setVoirPassages] = useState(false); // false = une ligne par dossier (passages regroupés)
+  const [seulementMulti, setSeulementMulti] = useState(false); // filtre « Multi-versions »
+  const [historiquePassages, setHistoriquePassages] = useState(null);
   const [commentaires, setCommentaires] = useState([]);
   const [evenements, setEvenements] = useState([]);
-  const [formulaireOuvert, setFormulaireOuvert] = useState(false);
+  const [formulaireOuvert, setFormulaireOuvert] = useState(false); // true, ou { depart } pour une nouvelle version
   const [importOuvert, setImportOuvert] = useState(false);
   const [listeIngenieursOuverte, setListeIngenieursOuverte] = useState(false);
   // Filtres « façon Excel » dans les en-têtes : null = pas de filtre, sinon Set des valeurs gardées
@@ -243,9 +250,15 @@ export default function SaisiePage() {
       date_mise_en_file: dansLaFile ? maintenant : null,
       date_assignation: dansLaFile ? null : maintenant,
       created_by: user.id,
+      ...(Number(form.nb_versions) > 1 ? { nb_versions: Number(form.nb_versions) } : {}),
     };
 
-    const { data, error } = await supabase.from("dossiers").insert(payload).select().single();
+    let { data, error } = await supabase.from("dossiers").insert(payload).select().single();
+    if (error && /nb_versions/.test(error.message)) {
+      // Migration V35 pas encore exécutée : on enregistre sans le nombre de versions
+      const { nb_versions, ...sans } = payload; // eslint-disable-line no-unused-vars
+      ({ data, error } = await supabase.from("dossiers").insert(sans).select().single());
+    }
     if (error) {
       alert("Erreur à l'enregistrement : " + error.message);
       return;
@@ -293,7 +306,11 @@ export default function SaisiePage() {
         .filter(Boolean)
         .some((v) => v.toLowerCase().includes(q)))
   );
-  const autres = autresRecherche.filter((d) => Object.keys(COLS).every((k) => garde(k, d)));
+  const autresPassages = autresRecherche.filter((d) => Object.keys(COLS).every((k) => garde(k, d)));
+  // Une seule ligne par dossier (même nom, client, fiche) : le passage en cours, sinon le plus récent
+  const groupesPassages = grouperPassages([...file, ...dossiers]);
+  const autresRegroupes = voirPassages ? autresPassages : regrouperLignes(autresPassages);
+  const autres = seulementMulti ? autresRegroupes.filter((d) => infoPassages(d, groupesPassages).versions > 1) : autresRegroupes;
   // Chaque liste de valeurs tient compte des autres filtres (comme Excel)
   const valeursPour = (cle) =>
     valeursColonne(
@@ -331,7 +348,7 @@ export default function SaisiePage() {
           })()}
           actions={
             <>
-              <button onClick={() => setImportOuvert(true)} className="btn-secondary">
+              <button onClick={() => setImportOuvert(true)} className="btn-secondary" data-ecriture>
                 <Icon name="upload" size={15} />
                 Importer un fichier Excel
               </button>
@@ -448,7 +465,7 @@ export default function SaisiePage() {
           </div>
           <div className="px-5 pb-3.5 flex flex-wrap items-center gap-3 border-b border-line">
             <span className="text-[13px] text-ink/60">Distribution</span>
-            <div className="segmented" title="Réglage commun à toute l'équipe">
+            <div className="segmented" title="Réglage commun à toute l'équipe" data-ecriture>
               <button data-active={fileMode === "auto"} onClick={() => changerMode("auto")}>
                 <Icon name="users" size={13} />
                 Automatique
@@ -547,7 +564,7 @@ export default function SaisiePage() {
                       {fileMode === "auto" ? (
                         <span className="block text-right text-xs text-ink/45">automatique</span>
                       ) : (
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1.5" data-ecriture>
                         <select
                           className="input input-sm w-44"
                           value={assignation[d.id] || ""}
@@ -627,8 +644,12 @@ export default function SaisiePage() {
         <section className="card overflow-hidden">
           <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
             <h3 className="text-[15px] font-bold">Dossiers en cours</h3>
-            <span className="text-[13px] text-ink/45">
-              {autres.length !== dossiers.length ? `${autres.length} / ${dossiers.length}` : dossiers.length} dossier(s)
+            <span className="flex items-center gap-4">
+              <BasculeMulti valeur={seulementMulti} onChange={setSeulementMulti} />
+              <BasculePassages valeur={voirPassages} onChange={setVoirPassages} />
+              <span className="text-[13px] text-ink/45">
+                {autres.length} {voirPassages ? "passage(s)" : "dossier(s)"}
+              </span>
             </span>
           </div>
           <div className="px-5 pb-3.5 flex flex-wrap items-center gap-2 border-b border-line">
@@ -685,12 +706,14 @@ export default function SaisiePage() {
                     <td>
                       <span className="nom-dossier-sm flex items-center gap-1.5">
                         {d.prioritaire && <Icon name="flame" size={13} className="text-isoRed" />}
-                        {d.nom_dossier}
-                        {modifs.get(d.id) && (
-                          <span className="badge badge-brand" title="Même dossier modifié plusieurs fois">
-                            Modif {modifs.get(d.id).n}/{modifs.get(d.id).total}
-                          </span>
-                        )}
+                        {voirPassages ? d.nom_dossier : nomAffiche(d)}
+                        {voirPassages
+                          ? modifs.get(d.id) && (
+                              <span className="badge badge-brand" title="Même dossier modifié plusieurs fois">
+                                Passage {modifs.get(d.id).n}/{modifs.get(d.id).total}
+                              </span>
+                            )
+                          : <PastillePassages info={infoPassages(d, groupesPassages)} onClick={() => setHistoriquePassages(d)} />}
                       </span>
                       {d.beneficiaire_nom && <span className="block text-xs text-ink/50">{d.beneficiaire_nom}</span>}
                     </td>
@@ -733,8 +756,9 @@ export default function SaisiePage() {
       </main>
 
       {formulaireOuvert && (
-        <Modal titre="Nouveau dossier" sousTitre="Saisie — dispatching" onFermer={() => setFormulaireOuvert(false)} taille="lg">
+        <Modal titre={formulaireOuvert.depart ? `Nouvelle version V${formulaireOuvert.depart._version}` : "Nouveau dossier"} sousTitre={formulaireOuvert.depart ? `de « ${formulaireOuvert.depart._source} »` : "Saisie — dispatching"} onFermer={() => setFormulaireOuvert(false)} taille="lg">
           <DossierFormSaisie
+            depart={formulaireOuvert.depart}
             options={options}
             dossiersExistants={[...file, ...dossiers]}
             chargeParIngenieur={charge}
@@ -761,9 +785,22 @@ export default function SaisiePage() {
               <div className="mb-4 flex items-center justify-between gap-3">
                 <StatutBadge etat={dossierOuvert.etat} />
                 <span className="flex gap-2">
-                  <button className="btn-secondary btn-sm" onClick={() => setEdition(true)}>
+                  <button className="btn-secondary btn-sm" data-ecriture onClick={() => setEdition(true)}>
                     <Icon name="pencil" size={14} />
                     Modifier les informations
+                  </button>
+                  <button
+                    className="btn-secondary btn-sm"
+                    data-ecriture
+                    title="Le dossier revient avec une nouvelle version (V2, V3…) : mêmes informations, nature Modification, date à vérifier"
+                    onClick={() => {
+                      const depart = departVersion(dossierOuvert, [...file, ...dossiers], options.naturesProd);
+                      setDossierOuvert(null);
+                      setFormulaireOuvert({ depart });
+                    }}
+                  >
+                    <Icon name="plus" size={14} />
+                    Ajouter une version
                   </button>
                   {profile?.role === "admin" && (
                     <button
@@ -793,9 +830,9 @@ export default function SaisiePage() {
                   supabase={supabase}
                   dossier={dossierOuvert}
                   auteur={nomActif}
-                  peutDeposerPieces
+                  peutDeposerPieces={!lecteur}
                   peutDeposerLivrables={false}
-                  peutSupprimer
+                  peutSupprimer={!lecteur}
                   onChange={fichiers.recharger}
                 />
               </div>
@@ -826,6 +863,7 @@ export default function SaisiePage() {
       {derniereAction && (
         <UndoToast message={`${derniereAction.libelle} — « ${derniereAction.nomDossier} »`} onAnnuler={annulerDerniereAction} />
       )}
+      {historiquePassages && <HistoriqueComplet supabase={supabase} dossier={historiquePassages} onFermer={() => setHistoriquePassages(null)} />}
     </div>
   );
 }

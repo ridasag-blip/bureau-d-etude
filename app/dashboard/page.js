@@ -26,7 +26,7 @@ export default function DashboardPage() {
     useValidateurActif(profile, supabase);
   const estAdmin = profile?.role === "admin";
   // Admin et Qualité ont chacun leur propre compte : pas de code PIN
-  const nominatif = ["admin", "qualite"].includes(profile?.role);
+  const nominatif = ["admin", "qualite", "lecteur"].includes(profile?.role);
   const nomActif = nominatif ? profile?.nom_complet : nomSelectionne;
 
   const router = useRouter();

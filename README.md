@@ -2,6 +2,33 @@
 
 App web remplaçant le classeur `QUALITE_suivi_prod.xlsx`. Stack : **Next.js 14 + Supabase + Vercel**, identité visuelle alignée sur le logo Hill Solution (bleu `#1F6FA8` / vert `#4E9F3D`).
 
+## Version 3.38 — compte « Visualisation » (lecture seule)
+
+- Nouveau rôle **Visualisation** (Paramètres → Comptes, ou import avec le rôle « Visualisation ») : voit la Saisie, la Qualité, le Dashboard (statistiques, rapport), les Erreurs, l'Export et les **factures enregistrées** ; pas les Paramètres ni « Mes dossiers ».
+- Aucune action possible : boutons et zones de saisie masqués (bandeau « Mode visualisation » en haut), et la base refuse toute création, modification ou suppression, fichiers compris (politiques restrictives).
+- Messagerie : la page reste vide (en-tête seulement) ; le compte n'apparaît pas dans l'annuaire.
+- Arrive sur le Dashboard à la connexion.
+- Migration **V36**.
+
+## Version 3.37 — dossiers en plusieurs versions (V1, V2…)
+
+- Reconnus de deux façons : une ligne par version avec un suffixe dans le nom (« …num 5-v1 », « …-v2 », « V2 », « _V2 », « (V2) »), même client et même fiche ; ou une seule ligne avec **Nombre de versions** (Saisie, import Excel colonne « Versions », Mes dossiers, Qualité).
+- **Une seule ligne** dans les listes avec la pastille violette « 2 versions · V1 + V2 », filtre « Multi-versions ».
+- **Qualité** : bloc « Versions de ce dossier » (statut, ingénieur, temps de chaque version, temps par version) ; « Je contrôle (V1 + V2) » et « Valider V1 + V2 » traitent toutes les versions d'un coup (ou une seule).
+- **Délai** multiplié par le nombre de versions (Mes dossiers : « 16 h (8 h × 2 versions) », Production en ce moment).
+- **Statistiques** : 1 dossier audité par dossier multi-versions, colonnes « dont multi-versions » et « Temps / version ».
+- **Facturation** : 1 dossier (quantité 1, « · 2 versions » sur la facture détaillée) ; si une version est déjà facturée, les autres ne sont plus proposées. Par défaut, seuls les nouveaux dossiers sont facturés.
+- **Ajouter une version** (Saisie, fiche du dossier) : nouvelle ligne « …-v3 » avec les mêmes informations, nature Modification, date de réception mise en valeur à vérifier. Une saisie avec un nom déjà existant affiche « Doublon : voulez-vous faire une autre version de ce dossier ? ». Une version ajoutée plus tard en Modification compte comme une modif (pas facturée).
+- Migration **V35** (`nb_versions`).
+
+## Version 3.36 — un dossier, une ligne : passages regroupés
+
+- Un dossier revenu en modification (par la Saisie ou un import) a une ligne par passage. Les listes Qualité, Saisie (dossiers en cours) et la recherche affichent maintenant **une seule ligne par dossier** (même nom, même client, même fiche CEE ; sans tenir compte des majuscules ni des espaces) : le passage en cours, sinon le plus récent, avec la pastille « X passages · Y ingénieurs ».
+- La case « Voir chaque passage » réaffiche le détail ligne par ligne.
+- **Historique complet** (pastille, bouton Historique, recherche) : tous les passages dans une seule frise (création, chaque modif, ingénieur, retours internes, audits, échanges) et les pièces / livrables de chaque passage.
+- **Export Excel** : feuille « Dossiers » (une ligne par dossier, nombre de passages, ingénieurs) + feuille « Détail des passages ».
+- Affichage seulement : aucune donnée modifiée, statistiques toujours comptées par passage. Pas de migration.
+
 ## Version 3.35 — un compte Qualité peut aussi traiter des dossiers
 
 - Paramètres → Comptes : case « Traite aussi des dossiers » sur un compte Qualité. La personne est ajoutée à la liste des ingénieurs, voit « Mes dossiers », peut recevoir des dossiers (Saisie, « Réassigner à ») ou prendre le suivant selon ses habilitations, et sa connexion est visible comme celle d'un ingénieur.

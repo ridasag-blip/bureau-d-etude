@@ -49,7 +49,7 @@ export default function LoginPage() {
       .eq("id", data.user.id)
       .single();
     setChargement(false);
-    router.push(profile?.role === "ingenieur" ? "/mes-dossiers" : "/saisie");
+    router.push(profile?.role === "ingenieur" ? "/mes-dossiers" : profile?.role === "lecteur" ? "/dashboard" : "/saisie");
   }
 
   return (

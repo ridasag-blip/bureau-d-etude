@@ -294,6 +294,18 @@ export default function MessageriePage() {
 
   const coupe = profile.chat_actif === false && !estAdmin;
 
+  // Compte Visualisation : la page Messagerie reste vide (en-tête seulement)
+  if (profile.role === "lecteur") {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar role={profile.role} nom={profile.nom_complet} />
+        <main className="flex-1 max-w-[1800px] w-full mx-auto px-3 sm:px-4 lg:px-5 py-5">
+          <PageHeader titre="Messagerie" horloge={false} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar role={profile.role} nom={profile.nom_complet || profile.ingenieur_ref} />

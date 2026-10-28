@@ -9,8 +9,10 @@ const ROUTES_ADMIN_QUALITE = ["/dashboard", "/statistiques", "/qualite", "/saisi
 const ROUTES_INGENIEUR_ONLY = ["/mes-dossiers"];
 
 function accueilPour(role) {
-  return role === "ingenieur" ? "/mes-dossiers" : "/saisie";
+  return role === "ingenieur" ? "/mes-dossiers" : role === "lecteur" ? "/dashboard" : "/saisie";
 }
+// Compte « Visualisation » (lecteur) : tout en consultation, sauf les Paramètres
+const ROUTES_INTERDITES_LECTEUR = ["/parametres", "/mes-dossiers"];
 
 export async function middleware(request) {
   let response = NextResponse.next({ request: { headers: request.headers } });
@@ -61,10 +63,17 @@ export async function middleware(request) {
     if (errProfil) ({ data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single());
 
     const role = profile?.role;
+    const lecteur = role === "lecteur";
+
+    if (lecteur && ROUTES_INTERDITES_LECTEUR.some((r) => path.startsWith(r))) {
+      const url = request.nextUrl.clone();
+      url.pathname = accueilPour(role);
+      return NextResponse.redirect(url);
+    }
 
 
     if (
-      (ROUTES_ADMIN_ONLY.some((r) => path.startsWith(r)) && role !== "admin") ||
+      (ROUTES_ADMIN_ONLY.some((r) => path.startsWith(r)) && role !== "admin" && !lecteur) ||
       (ROUTES_SUPERVISEUR.some((r) => path.startsWith(r)) && profile?.fonction === "Responsable")
     ) {
       const url = request.nextUrl.clone();
@@ -74,7 +83,7 @@ export async function middleware(request) {
 
     if (
       ROUTES_ADMIN_QUALITE.some((r) => path.startsWith(r)) &&
-      !["admin", "qualite"].includes(role)
+      !["admin", "qualite", "lecteur"].includes(role)
     ) {
       const url = request.nextUrl.clone();
       url.pathname = accueilPour(role);

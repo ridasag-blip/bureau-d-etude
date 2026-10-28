@@ -22,6 +22,10 @@ import { gardePage } from "@/components/ui/Screens";
 import { useAppData } from "@/lib/useAppData";
 import { useRafraichissement } from "@/lib/useRafraichissement";
 import { useTempsReel, signalerMajDossiers } from "@/lib/useTempsReel";
+import { grouperPassages, regrouperLignes, infoPassages, nomAffiche } from "@/lib/regroupement";
+import { indexUnites, numVersion, versionsDe } from "@/lib/versions";
+import BlocVersions from "@/components/BlocVersions";
+import { BasculePassages, BasculeMulti, PastillePassages } from "@/components/Passages";
 import { ingenieurResponsable } from "@/lib/rapportQualite";
 import { chargerVerifications, listeVerifications, serieDossiersAudites } from "@/lib/verifications";
 import { useValidateurActif } from "@/lib/useValidateurActif";
@@ -56,7 +60,7 @@ export default function QualitePage() {
     useValidateurActif(profile, supabase);
   const estAdmin = profile?.role === "admin";
   // Admin et Qualité ont chacun leur propre compte (identifiant + mot de passe) : pas de code PIN
-  const nominatif = ["admin", "qualite"].includes(profile?.role);
+  const nominatif = ["admin", "qualite", "lecteur"].includes(profile?.role);
   const nomActif = nominatif ? profile?.nom_complet : nomSelectionne;
   const nomTrace = nomActif || null;
 
@@ -66,6 +70,8 @@ export default function QualitePage() {
   const [seuilHeures, setSeuilHeures] = useState(1);
   const [seuilUrgence, setSeuilUrgence] = useState(24);
   const [dossierActif, setDossierActif] = useState(null);
+  const [voirPassages, setVoirPassages] = useState(false); // false = une ligne par dossier (passages regroupés)
+  const [seulementMulti, setSeulementMulti] = useState(false); // filtre « Multi-versions »
   const [typeRetour, setTypeRetour] = useState(null); // interne | qualite | client
   const [periode, setPeriode] = useState({ mode: "tout", jour: new Date().toISOString().slice(0, 10), mois: new Date().toISOString().slice(0, 7) });
   const [form, setForm] = useState({ cause: "", commentaire: "", reassigner: "", bibliotheque: false });
@@ -255,9 +261,17 @@ export default function QualitePage() {
     return auditeur;
   }
 
-  async function valider(d) {
+  async function valider(d, { toutes = false } = {}) {
     const auditeur = await resoudreAuditeur(d);
     if (!auditeur) return;
+    // Dossier en plusieurs versions : les autres versions en contrôle sont validées en même temps
+    if (toutes) {
+      const maintenant = new Date().toISOString();
+      for (const v of autresVersions(d).filter((x) => x.etat === S.VERIF)) {
+        const { error } = await supabase.from("dossiers").update({ etat: S.VALIDE, date_verification: maintenant, valide_par: auditeur, a_corriger: false }).eq("id", v.id);
+        if (!error) await enregistrerEvenement(supabase, v.id, "verification_ok", { nom: auditeur, cause: "Validé avec les autres versions" });
+      }
+    }
     return appliquer(
       d,
       { etat: S.VALIDE, date_verification: new Date().toISOString(), valide_par: auditeur, a_corriger: false },
@@ -366,7 +380,7 @@ export default function QualitePage() {
   }
 
   // « Je contrôle » : le dossier passe « En vérification Q » au nom de la personne
-  async function prendreEnControle(d) {
+  async function prendreEnControle(d, { toutes = false } = {}) {
     const { data: frais } = await supabase.from("dossiers").select("etat, pris_en_charge_par").eq("id", d.id).maybeSingle();
     if (frais && frais.etat !== S.A_CONTROLER) {
       alert(
@@ -375,6 +389,14 @@ export default function QualitePage() {
           : "Ce dossier n'est plus à contrôler."
       );
       return chargerDossiers();
+    }
+    // Dossier en plusieurs versions : les autres versions à contrôler passent aussi en contrôle
+    if (toutes) {
+      const maintenant = new Date().toISOString();
+      for (const v of autresVersions(d).filter((x) => x.etat === S.A_CONTROLER)) {
+        const { error } = await supabase.from("dossiers").update({ etat: S.VERIF, pris_en_charge_par: nomActif || null, date_prise_en_charge: maintenant }).eq("id", v.id).eq("etat", S.A_CONTROLER);
+        if (!error) await enregistrerEvenement(supabase, v.id, "prise_en_charge", { nom: nomTrace, cause: "Contrôlé avec les autres versions" });
+      }
     }
     const ok = await appliquer(
       d,
@@ -424,6 +446,19 @@ export default function QualitePage() {
 
   // Filtres (pastilles), dans l'ordre du circuit
   const CHEZ_INGENIEUR = [S.FILE, S.ASSIGNE, S.EN_COURS, S.ATTENTE_INFO];
+  // Dossiers en plusieurs versions (V1, V2…) : lignes sœurs du même passage
+  const indexV = indexUnites(dossiers);
+  const autresVersions = (d) => (indexV.get(d.id)?.membres || [d]).filter((x) => x.id !== d.id);
+  const libelleV = (d) => {
+    const m = indexV.get(d.id)?.membres || [d];
+    const n = m.map((x) => numVersion(x.nom_dossier)).filter((x) => x !== null);
+    return n.length > 1 ? n.sort((a, b) => a - b).map((x) => `V${x}`).join(" + ") : `les ${m.length} versions`;
+  };
+  async function changerNbVersions(d, n) {
+    const { error } = await supabase.from("dossiers").update({ nb_versions: n }).eq("id", d.id);
+    if (error) return alert(/nb_versions/.test(error.message) ? "Le nombre de versions demande la migration V35 : l'administrateur doit l'exécuter dans Supabase." : "Action impossible : " + error.message);
+    chargerDossiers();
+  }
   const estRetour = (d) => d.a_corriger && CHEZ_INGENIEUR.includes(d.etat);
   // Un retour interne (avant ou après audit) compte encore sur ce dossier : la Qualité peut le corriger
   const dejaTermine = (d) => [S.VALIDE, "Dossier vérifié", S.PAS_DE_MODIF].includes(d.etat);
@@ -480,7 +515,8 @@ export default function QualitePage() {
 
   // Tableau unique, du dossier le plus récent au plus ancien
   const modifs = rangsModifs(dossiers);
-  const lignes = dossiers
+  const groupesPassages = grouperPassages(dossiers);
+  const lignesPassages = dossiers
     .filter((d) => parStatut(d) && parOperation(d))
     .filter(correspond)
     .sort(
@@ -488,6 +524,9 @@ export default function QualitePage() {
         dateDerniereModif(b).localeCompare(dateDerniereModif(a)) ||
         String(b.created_at || "").localeCompare(String(a.created_at || ""))
     );
+  // Une seule ligne par dossier (même nom, client, fiche) : le passage en cours, sinon le plus récent
+  const lignesRegroupees = voirPassages ? lignesPassages : regrouperLignes(lignesPassages);
+  const lignes = seulementMulti ? lignesRegroupees.filter((d) => infoPassages(d, groupesPassages).versions > 1) : lignesRegroupees;
 
   // Barre « Depuis » : temps passé dans l'étape, comparé au délai (contrôle) ou au seuil d'urgence
   function barreDepuis(d) {
@@ -610,8 +649,9 @@ export default function QualitePage() {
           </section>
         </div>
 
-        {/* Décision */}
-        <div className="px-5 py-4 bg-[#FAFCFE] border-t border-line flex flex-col gap-3">
+        {/* Décision (masquée pour un compte Visualisation) */}
+        <div className="px-5 py-4 bg-[#FAFCFE] border-t border-line flex flex-col gap-3" data-ecriture>
+          <BlocVersions d={d} versions={[d, ...autresVersions(d)]} nbVersions={versionsDe(d, indexV)} onChanger={changerNbVersions} />
           {peutAnnulerRetour && aRetourInterneActif(d) && (
             <div className="rounded-lg border border-isoGold/40 bg-isoGold-light/60 p-3 flex flex-col gap-2">
               <p className="text-sm">
@@ -674,7 +714,18 @@ export default function QualitePage() {
               )}
             </div>
           )}
-          {d.etat === S.A_CONTROLER && (
+          {d.etat === S.A_CONTROLER && autresVersions(d).some((x) => x.etat === S.A_CONTROLER) && (
+            <div className="flex flex-col gap-2">
+              <button onClick={() => prendreEnControle(d, { toutes: true })} className="btn-primary w-full" title="Toutes les versions à contrôler passent « En vérification Q » à ton nom">
+                <Icon name="shield" size={15} />
+                Je contrôle ({libelleV(d)})
+              </button>
+              <button onClick={() => prendreEnControle(d)} className="btn-secondary w-full">
+                Contrôler seulement cette version
+              </button>
+            </div>
+          )}
+          {d.etat === S.A_CONTROLER && !autresVersions(d).some((x) => x.etat === S.A_CONTROLER) && (
             <button onClick={() => prendreEnControle(d)} className="btn-primary w-full" title="Le dossier passe « En vérification Q » à ton nom">
               <Icon name="shield" size={15} />
               Je contrôle
@@ -714,10 +765,22 @@ export default function QualitePage() {
                 <Icon name="undo" size={14} />
                 Retour interne
               </button>
-              <button onClick={() => valider(d)} className="btn-success" disabled={!auditeurPour(d)}>
-                <Icon name="check" size={14} />
-                Valider
-              </button>
+              {autresVersions(d).some((x) => x.etat === S.VERIF) ? (
+                <>
+                  <button onClick={() => valider(d)} className="btn-secondary" disabled={!auditeurPour(d)}>
+                    Valider cette version
+                  </button>
+                  <button onClick={() => valider(d, { toutes: true })} className="btn-success" disabled={!auditeurPour(d)}>
+                    <Icon name="check" size={14} />
+                    Valider {libelleV(d)}
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => valider(d)} className="btn-success" disabled={!auditeurPour(d)}>
+                  <Icon name="check" size={14} />
+                  Valider
+                </button>
+              )}
             </div>
           )}
           {[S.VALIDE, S.PAS_DE_MODIF].includes(d.etat) && (
@@ -1013,8 +1076,10 @@ export default function QualitePage() {
             <input type="month" className="input input-sm w-40" value={periode.mois} onChange={(e) => setPeriode((p) => ({ ...p, mois: e.target.value }))} aria-label="Mois" />
           )}
           <span className="ml-auto text-[13px] text-ink/60 flex items-center gap-2">
+            <BasculeMulti valeur={seulementMulti} onChange={setSeulementMulti} />
+            <BasculePassages valeur={voirPassages} onChange={setVoirPassages} />
             <span>
-              <strong className="text-ink tabular">{lignes.length}</strong> dossier(s) affiché(s)
+              <strong className="text-ink tabular">{lignes.length}</strong> {voirPassages ? "passage(s)" : "dossier(s)"} affiché(s)
             </span>
             {filtresActifs && (
               <button
@@ -1062,12 +1127,14 @@ export default function QualitePage() {
                       <td>
                         <span className="nom-dossier-sm flex items-center gap-1.5 whitespace-nowrap">
                           {d.prioritaire && <Icon name="flame" size={15} className="text-isoRed" />}
-                          {d.nom_dossier}
-                          {modifs.get(d.id) && (
-                            <span className="badge badge-brand" title="Même dossier modifié plusieurs fois">
-                              Modif {modifs.get(d.id).n}/{modifs.get(d.id).total}
-                            </span>
-                          )}
+                          {voirPassages ? d.nom_dossier : nomAffiche(d)}
+                          {voirPassages
+                            ? modifs.get(d.id) && (
+                                <span className="badge badge-brand" title="Même dossier modifié plusieurs fois">
+                                  Passage {modifs.get(d.id).n}/{modifs.get(d.id).total}
+                                </span>
+                              )
+                            : <PastillePassages info={infoPassages(d, groupesPassages)} onClick={() => setDossierHistorique(d)} />}
                           {d.nb_retours >= 2 && <span className="badge badge-red">{d.nb_retours} retours</span>}
                           <PastilleEchanges resume={resumes[d.id]} de={[d.ingenieur, d.ingenieur_modif]} />
                         </span>

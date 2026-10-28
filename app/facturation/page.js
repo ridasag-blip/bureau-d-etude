@@ -16,6 +16,7 @@ import {
   bornesMois,
   completerConfig,
   construireLignes,
+  nbDossiersFactures,
   dateFr,
   dossiersAFacturer,
   euros,
@@ -75,7 +76,11 @@ export default function FacturationPage() {
   const [motif, setMotif] = useState("");
 
   // Administrateur principal seulement (les comptes Admin « Responsable » n'y ont pas accès)
-  const estAdmin = profile?.role === "admin" && profile?.fonction !== "Responsable";
+  const lecteur = profile?.role === "lecteur"; // compte Visualisation : factures enregistrées, en consultation
+  const estAdmin = (profile?.role === "admin" && profile?.fonction !== "Responsable") || lecteur;
+  useEffect(() => {
+    if (lecteur && onglet !== "historique") setOnglet("historique");
+  }, [lecteur, onglet]);
 
   async function chargerReferentiel() {
     const [p, f] = await Promise.all([
@@ -129,6 +134,7 @@ export default function FacturationPage() {
   const { retenus, dejaFactures: deja } = dossiersAFacturer(dossiers, { client, du: periode.du, au: periode.au, base, nouveaux, modifications, exclureFactures, dejaFactures });
   const lignes = construireLignes(retenus, config, base);
   const t = totaux(lignes, config.tva);
+  const nbFactures = nbDossiersFactures(retenus); // les versions V1, V2… d'un dossier comptent pour 1
   const numeroAuto = numeroSuivant(config.prefixe, dateFacture, factures.map((f) => f.numero));
   useEffect(() => {
     if (!numeroTouche) setNumero(numeroAuto);
@@ -189,7 +195,7 @@ export default function FacturationPage() {
       setMessage({ ton: "red", texte: `La facture n'a pas pu être enregistrée : ${error.message}` });
       return;
     }
-    setMessage({ ton: "green", texte: `Facture ${facture.numero} enregistrée. Ses ${retenus.length} dossiers ne seront plus proposés sur une autre facture.` });
+    setMessage({ ton: "green", texte: `Facture ${facture.numero} enregistrée. Ses ${nbFactures} dossiers ne seront plus proposés sur une autre facture.` });
     setNumeroTouche(false);
     chargerReferentiel();
   }
@@ -239,7 +245,7 @@ export default function FacturationPage() {
         <div className="no-print">
           <PageHeader icone="receipt" titre="Facturation" sousTitre="Factures mensuelles par client, à partir des dossiers de la période.">
             <div className="onglets-hero flex flex-wrap gap-1 -mb-2 mt-2 border-b border-white/25">
-              {ONGLETS.map(([v, l, i]) => (
+              {ONGLETS.filter(([v]) => !lecteur || v === "historique").map(([v, l, i]) => (
                 <button key={v} onClick={() => (setOnglet(v), setFactureVue(null))} aria-current={onglet === v ? "page" : undefined} className="flex items-center gap-2 px-4 h-11 border-b-2 -mb-px text-sm font-semibold whitespace-nowrap">
                   <Icon name={i} size={16} />
                   {l}
@@ -377,7 +383,7 @@ export default function FacturationPage() {
                 <div className="rounded-lg bg-paper px-4 py-3 text-sm">
                   <p className="flex justify-between">
                     <span className="text-ink/60">Dossiers facturés</span>
-                    <b className="tabular">{chargement ? "…" : retenus.length}</b>
+                    <b className="tabular">{chargement ? "…" : nbFactures}</b>
                   </p>
                   <p className="flex justify-between mt-1">
                     <span className="text-ink/60">Total HT</span>
@@ -446,7 +452,7 @@ export default function FacturationPage() {
                           {dateFr(f.periode_du)} → {dateFr(f.periode_au)}
                         </td>
                         <td>{f.modele === "detaillee" ? "Détaillée" : "Simple"}</td>
-                        <td className="text-right tabular">{(f.dossiers || []).length}</td>
+                        <td className="text-right tabular">{Array.isArray(f.lignes) && f.lignes.length ? f.lignes.reduce((a, l) => a + (Number(l.qte) || 0), 0) : (f.dossiers || []).length}</td>
                         <td className="text-right tabular whitespace-nowrap">{euros(f.total_ht)} €</td>
                         <td className="text-right tabular whitespace-nowrap font-semibold">{euros(f.total_ttc)} €</td>
                         <td>{f.annulee ? <span className="badge badge-neutral" title={f.annulee_motif || ""}>Annulée</span> : <span className="badge badge-green">Émise</span>}</td>
@@ -456,7 +462,7 @@ export default function FacturationPage() {
                             Afficher
                           </button>
                           {!f.annulee && (
-                            <button className="btn-ghost btn-sm text-isoRed ml-1" onClick={() => setAAnnuler(f)}>
+                            <button className="btn-ghost btn-sm text-isoRed ml-1" data-ecriture onClick={() => setAAnnuler(f)}>
                               Annuler
                             </button>
                           )}
@@ -483,7 +489,7 @@ export default function FacturationPage() {
                   <Icon name="chevronRight" size={16} className="rotate-180" />
                   Revenir à la liste
                 </button>
-                <button className="btn-primary" onClick={imprimer}>
+                <button className="btn-primary" data-lecture onClick={imprimer}>
                   <Icon name="download" size={16} />
                   Imprimer / PDF
                 </button>

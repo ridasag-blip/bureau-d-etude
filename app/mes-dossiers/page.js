@@ -27,11 +27,13 @@ import { useIngenieurSelectionne } from "@/lib/useNomSelectionne";
 import { formatDate, formatDuree, S, typeDernierRetour, TYPES_RETOUR } from "@/lib/constants";
 import { enregistrerEvenement, annulerAction, instantane } from "@/lib/actions";
 import { secondesTraitement, heuresTraitementFini, figerTemps, majDossier } from "@/lib/tempsTraitement";
+import { indexUnites, versionsDe } from "@/lib/versions";
+import { PastilleVersions } from "@/components/Passages";
 
 const AUJOURD_HUI_ISO = new Date().toISOString().slice(0, 10);
 
 // Chrono du dossier en cours : temps passé dessus, pauses exclues
-function Chrono({ dossier, delaiMaxHeures }) {
+function Chrono({ dossier, delaiMaxHeures, versions = 1 }) {
   const [, forcer] = useState(0);
   useEffect(() => {
     const id = setInterval(() => forcer((n) => n + 1), 30000);
@@ -39,7 +41,9 @@ function Chrono({ dossier, delaiMaxHeures }) {
   }, []);
   if (!dossier?.date_acceptation) return null;
   const ecoule = secondesTraitement(dossier) / 3600;
-  const reste = delaiMaxHeures ? delaiMaxHeures - ecoule : null;
+  // Dossier en plusieurs versions : le délai est multiplié par le nombre de versions
+  const delai = delaiMaxHeures ? delaiMaxHeures * versions : null;
+  const reste = delai ? delai - ecoule : null;
   const depasse = reste !== null && reste < 0;
   return (
     <div className="flex flex-col items-end">
@@ -47,6 +51,11 @@ function Chrono({ dossier, delaiMaxHeures }) {
       {reste !== null && (
         <span className={`text-xs font-semibold mt-1 ${depasse ? "text-isoRed" : "text-isoGold-dark"}`}>
           {depasse ? `Délai dépassé de ${formatDuree(-reste)}` : `Il te reste ${formatDuree(reste)}`}
+        </span>
+      )}
+      {delai !== null && versions > 1 && (
+        <span className="text-[11px] text-ink/50 mt-0.5">
+          Délai {formatDuree(delai)} ({formatDuree(delaiMaxHeures)} × {versions} versions)
         </span>
       )}
     </div>
@@ -97,6 +106,13 @@ export default function MesDossiersPage() {
       }
     })();
   }, [profile]);
+
+  const indexV = indexUnites(dossiers);
+  async function changerNbVersions(d, n) {
+    const { error } = await supabase.from("dossiers").update({ nb_versions: n }).eq("id", d.id);
+    if (error) return alert(/nb_versions/.test(error.message) ? "Le nombre de versions demande la migration V35 : l'administrateur doit l'exécuter dans Supabase." : "Action impossible : " + error.message);
+    chargerDossiers();
+  }
 
   async function chargerDossiers() {
     if (!nom) return;
@@ -553,6 +569,7 @@ export default function MesDossiersPage() {
                       <p className="text-[13px] font-semibold text-brand-600">Dossier en cours</p>
                       <h2 className="nom-dossier text-[52px] flex items-center gap-3 flex-wrap mt-1">
                         {enCours.nom_dossier}
+                        <PastilleVersions n={versionsDe(enCours, indexV)} />
                         {enCours.prioritaire && (
                           <span className="badge badge-red">
                             <Icon name="flame" size={12} />
@@ -574,7 +591,19 @@ export default function MesDossiersPage() {
                         ))}
                       </dl>
                     </div>
-                    <Chrono dossier={enCours} delaiMaxHeures={delaiMaxHeures} />
+                    <div className="flex flex-col items-end gap-2">
+                      <Chrono dossier={enCours} delaiMaxHeures={delaiMaxHeures} versions={versionsDe(enCours, indexV)} />
+                      {(indexV.get(enCours.id)?.membres.length || 1) < 2 && (
+                        <label className="flex items-center gap-1.5 text-[12px] text-ink/55" title="Un dossier en plusieurs versions compte pour 1 dossier ; son délai est multiplié par le nombre de versions">
+                          Versions
+                          <select className="input !py-0.5 !px-1.5 !text-[12px] !w-auto" value={versionsDe(enCours, indexV)} onChange={(e) => changerNbVersions(enCours, Number(e.target.value))}>
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
                   </div>
 
                   {/* Parcours du dossier */}

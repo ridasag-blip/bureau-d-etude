@@ -416,3 +416,13 @@ button.tuile-cockpit:hover { border-color: #7FB0D9; }
   .segmented-lg > button { padding: 0 10px; font-size: 13px; }
   .calendrier-pop { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-width: none; }
 }
+
+/* Dossiers en plusieurs versions (V1, V2…) */
+.badge-versions { background: #EEE7FB; color: #5B3FA3; }
+button.badge-versions:hover { background: #E2D6F8; }
+
+/* Compte « Visualisation » (lecture seule) : boutons et zones d'action masqués partout.
+   data-lecture garde visibles les actions de consultation (export, impression, filtres). */
+body.lecture-seule :is(.btn-primary, .btn-success, .btn-danger, [data-ecriture]):not([data-lecture]) {
+  display: none !important;
+}

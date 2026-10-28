@@ -60,6 +60,7 @@ function roleEtFonction(role) {
   if (r.startsWith("qual")) return { role: "qualite", fonction: null };
   if (r.startsWith("ing")) return { role: "ingenieur", fonction: null };
   if (r.startsWith("adm")) return { role: "admin", fonction: null };
+  if (r.startsWith("vis") || r.startsWith("lect")) return { role: "lecteur", fonction: null };
   return null;
 }
 
@@ -75,6 +76,9 @@ async function ecrireProfil(client, ligne, existe) {
   if (error && /fonction/.test(error.message)) {
     const { fonction, ...sans } = ligne;
     ({ error } = await tenter(sans));
+  }
+  if (error && /lecteur/.test(error.message)) {
+    return { message: "Le rôle « Visualisation » demande la migration V36 : exécutez-la dans Supabase." };
   }
   if (error && /traite_dossiers/.test(error.message)) {
     return { message: "La case « Peut aussi traiter des dossiers » demande la migration V34 : exécutez-la dans Supabase." };
