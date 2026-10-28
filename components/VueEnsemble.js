@@ -96,7 +96,7 @@ function ProductionParIngenieur({ base, ingenieurs, operations, periodeHaut, fic
   const ok = (d) => f === "Tous" || d?.nom_operation === f;
   const lignes = parIngenieur(base, (date) => dansBornes(date, b), ok, ingenieurs).sort((x, y) => y.total - x.total || y.ri - x.ri || x.nom.localeCompare(y.nom));
   const max = Math.max(1, ...lignes.map((l) => l.total));
-  const tot = lignes.reduce((t, l) => ({ nv: t.nv + l.nv, md: t.md + l.md, ri: t.ri + l.ri, ar: t.ar + l.dossiersAvecRetour, rc: t.rc + l.rc }), { nv: 0, md: 0, ri: 0, ar: 0, rc: 0 });
+  const tot = lignes.reduce((t, l) => ({ nv: t.nv + l.nv, md: t.md + l.md, ri: t.ri + l.ri, ar: t.ar + l.dossiersAvecRetour, rc: t.rc + l.rc, mv: t.mv + (l.multi || 0) }), { nv: 0, md: 0, ri: 0, ar: 0, rc: 0, mv: 0 });
   const r = resumePeriode(base, (date) => dansBornes(date, b), ok);
 
   return (
@@ -130,11 +130,12 @@ function ProductionParIngenieur({ base, ingenieurs, operations, periodeHaut, fic
               <th className="text-right" title="Une par modif, quel que soit le nombre de retours internes">Modifs auditées</th>
               <th className="w-[18%]">Répartition</th>
               <th className="text-right">Total audité</th>
+              <th className="text-right" title="Dossiers en plusieurs versions (V1, V2…) : chacun compte pour 1 dossier">dont multi-versions</th>
               <th className="text-right" title="Chaque retour interne compte (avant ou après audit)">Retours internes</th>
               <th className="text-right" title="Dossiers ayant eu au moins un retour interne">Dossiers avec retour</th>
               <th className="text-right" title="Dossiers audités sans aucun retour interne">1er coup</th>
               <th className="text-right" title="Demandes du client (pas une faute)">Retours client</th>
-              <th className="text-right" title="Temps passé par dossier, pauses exclues">Temps moy.</th>
+              <th className="text-right" title="Temps passé par version, pauses exclues (un dossier en 2 versions : temps ÷ 2)">Temps / version</th>
             </tr>
           </thead>
           <tbody>
@@ -153,6 +154,7 @@ function ProductionParIngenieur({ base, ingenieurs, operations, periodeHaut, fic
                   <Repartition a={l.nv} b={l.md} max={max} hauteur={14} />
                 </td>
                 <td className="text-right tabular font-semibold">{l.total}</td>
+                <td className="text-right tabular" style={{ color: l.multi ? "#5B3FA3" : undefined, fontWeight: l.multi ? 600 : undefined }}>{l.multi || 0}</td>
                 <td className="text-right tabular" style={{ color: l.ri ? C_RI : undefined, fontWeight: l.ri ? 600 : undefined }}>{l.ri}</td>
                 <td className="text-right tabular text-ink/65">{l.dossiersAvecRetour}</td>
                 <td className="text-right tabular whitespace-nowrap">{l.premierCoup === null ? "—" : `${l.premierCoup} %`}</td>
@@ -162,7 +164,7 @@ function ProductionParIngenieur({ base, ingenieurs, operations, periodeHaut, fic
             ))}
             {lignes.length === 0 && (
               <tr>
-                <td colSpan={10} className="table-empty">
+                <td colSpan={11} className="table-empty">
                   Aucune production sur cette période.
                 </td>
               </tr>
@@ -174,6 +176,7 @@ function ProductionParIngenieur({ base, ingenieurs, operations, periodeHaut, fic
                 <td className="text-right tabular" style={{ color: T_MODIF }}>{nf(tot.md)}</td>
                 <td />
                 <td className="text-right tabular">{nf(tot.nv + tot.md)}</td>
+                <td className="text-right tabular" style={{ color: "#5B3FA3" }}>{nf(tot.mv)}</td>
                 <td className="text-right tabular" style={{ color: C_RI }}>{nf(tot.ri)}</td>
                 <td className="text-right tabular">{nf(tot.ar)}</td>
                 <td className="text-right tabular">{r.premierCoup === null ? "—" : `${r.premierCoup} %`}</td>

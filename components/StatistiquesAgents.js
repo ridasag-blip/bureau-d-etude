@@ -71,11 +71,12 @@ export default function StatistiquesAgents({ dossiersFiltres, traitements, filtr
                 <th className="!text-right" title="Nouveaux dossiers audités">Nouveaux</th>
                 <th className="!text-right" title="Modifs auditées (une par modif, quel que soit le nombre de retours)">Modifs</th>
                 <th className="!text-right">Total audité</th>
+                <th className="!text-right" title="Dossiers en plusieurs versions (V1, V2…) : chacun compte pour 1 dossier">dont multi-versions</th>
                 <th className="!text-right" title="Chaque retour interne compte (avant ou après audit)">Ret. int.</th>
                 <th className="!text-right" title="Dossiers ayant eu au moins un retour interne">Dossiers avec retour</th>
                 <th className="!text-right" title="Dossiers audités sans aucun retour interne">1er coup</th>
                 <th className="!text-right" title="Demandes du client (pas une faute)">Ret. client</th>
-                <th className="!text-right" title="Temps passé par dossier, pauses exclues">Temps moy.</th>
+                <th className="!text-right" title="Temps passé par version, pauses exclues (un dossier en 2 versions : temps ÷ 2)">Temps / version</th>
                 <th className="!text-right">Qualité</th>
                 <th className="!text-right" title="Par rapport à l'objectif s'il est saisi, sinon au meilleur total de l'équipe">Quantité</th>
                 <th className="!text-right">Global</th>
@@ -97,6 +98,7 @@ export default function StatistiquesAgents({ dossiersFiltres, traitements, filtr
                   <td className="text-right">{stats.nvDossierTraite}</td>
                   <td className="text-right">{stats.modifTraite}</td>
                   <td className="text-right font-semibold">{stats.dossierTraiteTotal}</td>
+                  <td className={`text-right ${stats.multiVersions ? "text-[#5B3FA3] font-semibold" : "text-ink/40"}`}>{stats.multiVersions || 0}</td>
                   <td className={`text-right ${stats.nbRetourInterne ? "text-isoGold-dark font-semibold" : "text-ink/40"}`}>
                     {stats.nbRetourInterne}
                   </td>
@@ -127,7 +129,7 @@ export default function StatistiquesAgents({ dossiersFiltres, traitements, filtr
               ))}
               {lignes.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="table-empty">Aucune donnée pour ces filtres.</td>
+                  <td colSpan={14} className="table-empty">Aucune donnée pour ces filtres.</td>
                 </tr>
               )}
             </tbody>

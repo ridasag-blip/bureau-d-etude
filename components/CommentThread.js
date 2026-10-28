@@ -37,7 +37,7 @@ export default function CommentThread({ commentaires, onAjouter, auteurNom }) {
         ))}
         {commentaires.length === 0 && <li className="text-sm text-ink/40">Aucun commentaire pour le moment.</li>}
       </ul>
-      <div className="flex gap-2">
+      <div className="flex gap-2" data-ecriture>
         <input
           className="input flex-1"
           placeholder={`Écrire en tant que ${auteurNom || "…"}`}

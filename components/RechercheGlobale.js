@@ -3,6 +3,7 @@ import { dateDerniereModif, estRemodifie, formatDate } from "@/lib/constants";
 import { useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import HistoriqueComplet from "@/components/HistoriqueComplet";
+import { grouperPassages, regrouperLignes, infoPassages, libellePassages, libelleVersions, nomAffiche } from "@/lib/regroupement";
 import StatutBadge from "@/components/ui/StatutBadge";
 import Icon from "@/components/ui/Icon";
 
@@ -36,18 +37,20 @@ export default function RechercheGlobale({ pleineLargeur = false }) {
     }
     let { data, error } = await supabase
       .from("dossiers")
-      .select("id, nom_dossier, ingenieur, nom_operation, etat, beneficiaire_nom, date, date_nouvelle_modification, date_retour_client")
+      .select("*")
       .or(conditions.join(","))
-      .limit(8);
+      .limit(40);
     if (error) {
       // migration v9 pas encore passée : recherche sur le nom seul
       ({ data } = await supabase
         .from("dossiers")
-        .select("id, nom_dossier, ingenieur, nom_operation, etat, date, date_retour_client")
+        .select("id, nom_dossier, ingenieur, nom_operation, client, etat, date, date_retour_client, created_at")
         .ilike("nom_dossier", `%${t}%`)
-        .limit(8));
+        .limit(40));
     }
-    setResultats(data || []);
+    // Un seul résultat par dossier (même nom, client, fiche), avec le nombre de passages
+    const groupes = grouperPassages(data || []);
+    setResultats(regrouperLignes(data || []).slice(0, 8).map((d) => ({ ...d, _passages: infoPassages(d, groupes) })));
     setOuvert(true);
   }
 
@@ -80,9 +83,9 @@ export default function RechercheGlobale({ pleineLargeur = false }) {
               className="w-full text-left px-3 py-2 rounded-lg hover:bg-brand-50/60 flex items-center justify-between gap-3"
             >
               <span className="min-w-0">
-                <span className="block text-sm font-semibold truncate">{d.nom_dossier}</span>
+                <span className="block text-sm font-semibold truncate">{d._passages?.lignes > 1 ? nomAffiche(d) : d.nom_dossier}</span>
                 <span className="block text-xs text-ink/45 truncate">
-                  {[dateDerniereModif(d) && `${estRemodifie(d) ? "modifié le" : "du"} ${formatDate(dateDerniereModif(d))}`, d.beneficiaire_nom, d.ingenieur, d.nom_operation].filter(Boolean).join(" · ")}
+                  {[libelleVersions(d._passages), libellePassages(d._passages), dateDerniereModif(d) && `${estRemodifie(d) || d._passages?.n > 1 ? "modifié le" : "du"} ${formatDate(dateDerniereModif(d))}`, d.beneficiaire_nom, d.ingenieur_modif || d.ingenieur, d.nom_operation].filter(Boolean).join(" · ")}
                 </span>
               </span>
               <StatutBadge etat={d.etat} />

@@ -13,6 +13,20 @@ export default function Timeline({ items }) {
     <ol className="relative flex flex-col gap-4 pl-6">
       <span className="absolute left-[7px] top-2 bottom-2 w-px bg-line" aria-hidden />
       {items.map((item) => {
+        // Repère de début d'un passage (dossier revenu en modification)
+        if (item.type === "passage") {
+          return (
+            <li key={item.key} className="relative text-sm -ml-6 pl-6 pt-1">
+              <span className="absolute left-[3px] top-2 w-[9px] h-[9px] rounded-sm bg-brand-500" aria-hidden />
+              <p className="font-semibold text-brand-600">{item.titre}</p>
+              <p className="text-xs text-ink/55">
+                {item.detail}
+                {item.detail ? " · " : ""}
+                {new Date(item.date).toLocaleDateString("fr-FR", { dateStyle: "medium" })}
+              </p>
+            </li>
+          );
+        }
         const estCom = item.type === "commentaire";
         const meta = estCom ? { texte: "Commentaire", ton: "neutral" } : EVENEMENTS[item.code] || { texte: item.code, ton: "neutral" };
         const couleur = TON_HEX[meta.ton];
@@ -26,6 +40,7 @@ export default function Timeline({ items }) {
               {estCom && <Icon name="message" size={13} className="text-ink/40" />}
               {meta.texte}
               {!estCom && item.detail && <span className="text-ink/50 font-normal">— {item.detail}</span>}
+              {item.passage && <span className="badge badge-neutral text-[10px]">passage {item.passage}</span>}
             </p>
             {estCom && <p className="text-ink/75 mt-1 bg-paper rounded-lg px-3 py-2">{item.detail}</p>}
             <p className="text-xs text-ink/45 mt-0.5">
@@ -47,5 +62,6 @@ export function versItemsEvenements(evenements = []) {
     detail: e.cause,
     auteur: e.effectue_par_nom,
     date: e.created_at,
+    dossier_id: e.dossier_id,
   }));
 }

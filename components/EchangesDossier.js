@@ -143,7 +143,7 @@ export default function EchangesDossier({ supabase, dossier, auteur, peutEcrire 
         <div ref={bas} />
       </div>
       {peutEcrire && (
-        <div className="flex gap-2">
+        <div className="flex gap-2" data-ecriture>
           <input
             className="input input-sm flex-1"
             placeholder="Écrire un message…"

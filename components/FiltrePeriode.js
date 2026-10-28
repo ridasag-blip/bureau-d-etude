@@ -81,7 +81,7 @@ function Calendrier({ jour, onChoisir, onFermer }) {
           <button type="button" className="btn-secondary btn-sm" onClick={onFermer}>
             Annuler
           </button>
-          <button type="button" className="btn-primary btn-sm" onClick={() => onChoisir(sel)}>
+          <button type="button" className="btn-primary btn-sm" data-lecture onClick={() => onChoisir(sel)}>
             Afficher ce jour
           </button>
         </span>

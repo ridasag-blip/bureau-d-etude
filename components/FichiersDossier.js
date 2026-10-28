@@ -157,7 +157,7 @@ export default function FichiersDossier({ supabase, dossier, auteur, peutDeposer
             )}
             {peutDeposer && (
               <>
-                <button className="btn-secondary btn-xs" onClick={() => ref.current?.click()} disabled={envoi === categorie}>
+                <button className="btn-secondary btn-xs" data-ecriture onClick={() => ref.current?.click()} disabled={envoi === categorie}>
                   <Icon name="upload" size={12} />
                   {envoi === categorie ? "Envoi…" : "Déposer"}
                 </button>
@@ -189,7 +189,7 @@ export default function FichiersDossier({ supabase, dossier, auteur, peutDeposer
                   <Icon name="download" size={14} />
                 </button>
                 {supprimable(f) && (
-                  <button className="btn-icon w-7 h-7 hover:text-isoRed" onClick={() => supprimer(f)} aria-label="Supprimer">
+                  <button data-ecriture className="btn-icon w-7 h-7 hover:text-isoRed" onClick={() => supprimer(f)} aria-label="Supprimer">
                     <Icon name="x" size={14} />
                   </button>
                 )}

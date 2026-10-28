@@ -1,4 +1,5 @@
 "use client";
+import { indexUnites, versionsDe } from "@/lib/versions";
 import { useEffect, useState } from "react";
 import Avatar from "@/components/ui/Avatar";
 import Icon from "@/components/ui/Icon";
@@ -99,6 +100,9 @@ export default function ProductionEnCeMoment({ dossiers, verifications = [], opt
   useRafraichissement(chargerDirect, true);
 
   const okFiche = (d) => fiche === "Tous" || d.nom_operation === fiche;
+  // Dossier en plusieurs versions : délai multiplié par le nombre de versions
+  const indexV = indexUnites(dossiers);
+  const delaiDe = (d) => delaiMax * (d ? versionsDe(d, indexV) : 1);
   const ds = dossiers.filter(okFiche);
 
   // ---------- Ingénieurs ----------
@@ -197,7 +201,8 @@ export default function ProductionEnCeMoment({ dossiers, verifications = [], opt
                   </thead>
                   <tbody>
                     {visiblesIng.map((l) => {
-                      const hors = l.h !== null && l.h >= delaiMax * 0.8;
+                      const dl = delaiDe(l.d);
+                      const hors = l.h !== null && l.h >= dl * 0.8;
                       return (
                         <tr key={l.nom}>
                           <td>
@@ -228,10 +233,11 @@ export default function ProductionEnCeMoment({ dossiers, verifications = [], opt
                             ) : (
                               <div className={`flex flex-col gap-1 min-w-[120px] text-xs ${hors ? "text-isoRed font-semibold" : "text-ink/60"}`}>
                                 <span className="block h-1.5 rounded-full bg-paper overflow-hidden">
-                                  <span className={`block h-full rounded-full ${l.etat === "pause" ? "bg-ink/25" : hors ? "bg-isoRed" : "bg-brand-500"}`} style={{ width: `${Math.min(100, (l.h / delaiMax) * 100)}%` }} />
+                                  <span className={`block h-full rounded-full ${l.etat === "pause" ? "bg-ink/25" : hors ? "bg-isoRed" : "bg-brand-500"}`} style={{ width: `${Math.min(100, (l.h / dl) * 100)}%` }} />
                                 </span>
                                 {formatDuree(l.h)}
-                                {l.etat === "pause" ? ", chrono arrêté" : l.h >= delaiMax ? ", hors délai" : hors ? ", bientôt hors délai" : ""}
+                                {l.etat === "pause" ? ", chrono arrêté" : l.h >= dl ? ", hors délai" : hors ? ", bientôt hors délai" : ""}
+                                {dl > delaiMax && <span className="text-[#5B3FA3] font-semibold"> · délai {formatDuree(dl)} ({dl / delaiMax} versions)</span>}
                               </div>
                             )}
                           </td>

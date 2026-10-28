@@ -101,7 +101,7 @@ export default function FicheBeneficiaire({ dossier, onSave, compact = false }) 
           </div>
         )}
         {onSave && (
-          <button className="btn-ghost btn-xs shrink-0" onClick={() => setEdition(true)}>
+          <button className="btn-ghost btn-xs shrink-0" data-ecriture onClick={() => setEdition(true)}>
             <Icon name="pencil" size={13} />
             {vide ? "Compléter" : "Modifier"}
           </button>

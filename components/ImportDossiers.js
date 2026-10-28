@@ -19,6 +19,7 @@ const COLONNES = {
   date: ["date", "date dossier", "date de creation"],
   nom_operation: ["operation", "fiche", "fiche cee", "nom operation", "nom de l operation", "nom de operation", "operation cee"],
   nature_prod: ["nature", "nature production", "nature prod", "nature de production"],
+  nb_versions: ["versions", "nombre de versions", "nb versions", "nb de versions"],
   client: ["client"],
   beneficiaire_nom: ["beneficiaire", "raison sociale", "nom beneficiaire", "nom ou raison sociale", "nom"],
   beneficiaire_siret: ["siret"],
@@ -186,6 +187,7 @@ export function telechargerModele(options) {
     Date: new Date().toLocaleDateString("fr-FR"),
     Opération: options.operations?.[0] || "BAR-TH-171",
     Nature: options.naturesProd?.[0] || "Nouveau dossier",
+    Versions: 1,
     Client: options.clients?.[0] || "",
     "Nom ou raison sociale": "M. Jean Dupont",
     SIRET: "",
@@ -213,6 +215,7 @@ export function telechargerModele(options) {
     ["Opération", "Oui", `Une de : ${(options.operations || []).join(", ")}`],
     ["Nature", "Non", `Une de : ${(options.naturesProd || []).join(", ")} — « Nouveau dossier » si vide`],
     ["Client", "Non", `Une de : ${(options.clients || []).join(", ")}`],
+    ["Versions", "Non", "Nombre de versions (V1, V2…) — 1 si vide. Deux lignes « …-v1 » / « …-v2 » sont aussi reconnues."],
     ["Nom ou raison sociale", "Oui", "Bénéficiaire des travaux"],
     ["SIRET", "Non", "14 chiffres, personne morale uniquement"],
     ["Responsable", "Non", "Personne à contacter"],
@@ -475,6 +478,7 @@ export default function ImportDossiers({ options, supabase, nomTrace, onFermer, 
             date,
             nom_operation: operation,
             nature_prod: nature,
+            ...(Number(String(txt("nb_versions") || "").replace(/\D/g, "")) > 1 ? { nb_versions: Math.min(20, Number(String(txt("nb_versions")).replace(/\D/g, ""))) } : {}),
             client,
             beneficiaire_nom: benefNom || null,
             beneficiaire_siret: siret || null,
@@ -544,7 +548,11 @@ export default function ImportDossiers({ options, supabase, nomTrace, onFermer, 
     for (let i = 0; i < lignesDb.length; i += 200) {
       const lot = lignesDb.slice(i, i + 200);
       const sources = valides.slice(i, i + 200);
-      const { data, error } = await supabase.from("dossiers").insert(lot).select("id");
+      let { data, error } = await supabase.from("dossiers").insert(lot).select("id");
+      if (error && /nb_versions/.test(error.message)) {
+        // Migration V35 pas encore exécutée : import sans le nombre de versions
+        ({ data, error } = await supabase.from("dossiers").insert(lot.map(({ nb_versions, ...x }) => x)).select("id")); // eslint-disable-line no-unused-vars
+      }
       if (error) erreursEnvoi.push(error.message);
       else {
         crees = crees.concat(data || []);

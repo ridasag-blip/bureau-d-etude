@@ -42,7 +42,7 @@ export default function ObjectifJour({ supabase, operations }) {
   }
 
   return (
-    <div className="card mb-6">
+    <div className="card mb-6" data-ecriture>
       <button
         onClick={() => setOuvert(!ouvert)}
         className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left"

@@ -52,6 +52,7 @@ const ROLES = [
   ["qualite", "Qualité"],
   ["responsable", "Responsable"],
   ["admin", "Admin"],
+  ["lecteur", "Visualisation"],
 ];
 const roleAffiche = (c) => (c.role === "admin" && c.fonction === "Responsable" ? "responsable" : c.role || "");
 const libelleRole = (r) => ROLES.find(([v]) => v === r)?.[1] || r;
@@ -63,6 +64,7 @@ function roleDepuisTexte(t) {
   if (r.startsWith("qual")) return "qualite";
   if (r.startsWith("ing")) return "ingenieur";
   if (r.startsWith("adm")) return "admin";
+  if (r.startsWith("vis") || r.startsWith("lect")) return "lecteur";
   return "";
 }
 
@@ -382,7 +384,7 @@ export default function GestionComptes({ supabase }) {
     );
   }
 
-  const ordreRole = { responsable: 0, admin: 1, qualite: 2, ingenieur: 3 };
+  const ordreRole = { responsable: 0, admin: 1, qualite: 2, ingenieur: 3, lecteur: 4 };
   const tries = [...comptes].sort(
     (a, b) => (ordreRole[roleAffiche(a)] ?? 9) - (ordreRole[roleAffiche(b)] ?? 9) || identifiant(a).localeCompare(identifiant(b))
   );
@@ -465,7 +467,7 @@ export default function GestionComptes({ supabase }) {
           </p>
         )}
         <p className="text-[11px] text-ink/45 mt-2">
-          Import : colonnes « Nom d'utilisateur », « Mot de passe », « Nom complet », « Rôle » (Ingénieur, Qualité, Responsable, Admin), « Ingénieur lié » (facultatif).
+          Import : colonnes « Nom d'utilisateur », « Mot de passe », « Nom complet », « Rôle » (Ingénieur, Qualité, Responsable, Admin, Visualisation), « Ingénieur lié » (facultatif).
           Un identifiant existant est mis à jour (mot de passe vide = inchangé).
         </p>
 
@@ -656,7 +658,8 @@ export default function GestionComptes({ supabase }) {
         </form>
         <p className="text-xs text-ink/50 mt-3">
           <strong>Qualité</strong> : le nom complet est enregistré dans « Audité par » et ajouté à la liste Service qualité. <strong>Responsable</strong> : mêmes droits
-          que l'admin. <strong>Ingénieur</strong> : compte lié à son nom, il voit uniquement ses dossiers.
+          que l'admin. <strong>Ingénieur</strong> : compte lié à son nom, il voit uniquement ses dossiers. <strong>Visualisation</strong> : voit tout sauf
+          les Paramètres (dossiers, statistiques, factures), sans rien pouvoir modifier ; messagerie fermée (migration V36).
         </p>
       </div>
 

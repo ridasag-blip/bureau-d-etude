@@ -391,7 +391,7 @@ export default function RapportQualite({ supabase, options }) {
               <Icon name="download" size={14} />
               Excel
             </button>
-            <button className="btn-primary btn-sm" onClick={() => window.print()} disabled={!rapport}>
+            <button className="btn-primary btn-sm" data-lecture onClick={() => window.print()} disabled={!rapport}>
               <Icon name="file" size={14} />
               Imprimer / PDF
             </button>

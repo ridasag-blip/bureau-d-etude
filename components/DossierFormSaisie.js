@@ -3,13 +3,16 @@ import { useMemo, useState } from "react";
 import Icon from "@/components/ui/Icon";
 import { doublonAdresse } from "@/lib/beneficiaires";
 import { emailValide, siretValide, telephoneValide, formatDate } from "@/lib/constants";
+import { famille, nomBase, nomVersion, numVersion, versionSuivante } from "@/lib/versions";
 
+const aujourdhui = () => new Date().toLocaleDateString("sv-SE");
 const initial = {
   date: new Date().toISOString().slice(0, 10),
   nom_dossier: "",
   nom_operation: "",
   client: "",
   nature_prod: "",
+  nb_versions: 1,
   commentaire: "",
   beneficiaire_nom: "",
   beneficiaire_siret: "",
@@ -26,24 +29,48 @@ const initial = {
  * Formulaire de création d'un dossier : dossier + bénéficiaire + dispatch
  * (dans la file commune, ou assigné directement à un ingénieur).
  */
-export default function DossierFormSaisie({ options, dossiersExistants, chargeParIngenieur, onSubmit, onAnnuler }) {
-  const [form, setForm] = useState(initial);
+/** Valeurs d'une nouvelle version d'un dossier existant : mêmes infos, nom « …-vN », nature Modification. */
+export function departVersion(source, dossiers, naturesProd = []) {
+  const fam = famille(source.nom_dossier, dossiers);
+  const n = versionSuivante(fam.length ? fam : [source]);
+  const modif = naturesProd.find((x) => String(x).toLowerCase().startsWith("modif")) || "Modification";
+  const champs = {};
+  for (const k of ["nom_operation", "client", "beneficiaire_nom", "beneficiaire_siret", "beneficiaire_responsable", "beneficiaire_adresse", "beneficiaire_email", "beneficiaire_telephone"]) champs[k] = source[k] || "";
+  return { ...initial, ...champs, nom_dossier: nomVersion(nomBase(source.nom_dossier), n), nature_prod: modif, nb_versions: 1, date: aujourdhui(), _version: n, _source: source.nom_dossier };
+}
+
+export default function DossierFormSaisie({ options, dossiersExistants, chargeParIngenieur, onSubmit, onAnnuler, depart }) {
+  const [form, setForm] = useState(depart || initial);
+  const [dateVue, setDateVue] = useState(false); // la date d'une nouvelle version est à vérifier
   const [envoi, setEnvoi] = useState(false);
   const [tente, setTente] = useState(false);
 
   const champ = (name, value) => setForm((f) => ({ ...f, [name]: value }));
 
+  // Même nom exact, ou même dossier sans numéro de version : doublon → proposer une nouvelle version
+  const fam = useMemo(() => famille(form.nom_dossier, dossiersExistants), [form.nom_dossier, dossiersExistants]);
   const doublonNom = useMemo(() => {
     if (!form.nom_dossier.trim()) return null;
-    return dossiersExistants?.find(
-      (d) => d.nom_dossier?.trim().toUpperCase() === form.nom_dossier.trim().toUpperCase()
-    );
-  }, [form.nom_dossier, dossiersExistants]);
+    const exact = fam.find((d) => d.nom_dossier?.trim().toUpperCase() === form.nom_dossier.trim().toUpperCase());
+    if (exact) return exact;
+    return numVersion(form.nom_dossier) === null ? fam[fam.length - 1] || null : null;
+  }, [form.nom_dossier, fam]);
+  const nouvelleVersion = !doublonNom && fam.length > 0 && numVersion(form.nom_dossier) !== null;
+  const versionsExistantes = [...new Set(fam.map((d) => numVersion(d.nom_dossier) ?? 1))].sort((a, b) => a - b);
+  // Même adresse : les versions d'un même dossier ne sont pas des doublons de logement
+  const doublonAdr = useMemo(() => {
+    const ids = new Set(fam.map((d) => d.id));
+    return doublonAdresse((dossiersExistants || []).filter((d) => !ids.has(d.id)), form.beneficiaire_adresse, form.nom_operation);
+  }, [form.beneficiaire_adresse, form.nom_operation, dossiersExistants, fam]);
 
-  const doublonAdr = useMemo(
-    () => doublonAdresse(dossiersExistants || [], form.beneficiaire_adresse, form.nom_operation),
-    [form.beneficiaire_adresse, form.nom_operation, dossiersExistants]
-  );
+  function faireVersion() {
+    const source = [...fam].sort((a, b) => String(a.created_at || a.date || "").localeCompare(String(b.created_at || b.date || ""))).pop() || doublonNom;
+    const v = departVersion(source, dossiersExistants, options.naturesProd);
+    setForm((f) => ({ ...v, mode: f.mode, ingenieur: f.ingenieur, prioritaire: f.prioritaire, commentaire: f.commentaire }));
+    setDateVue(false);
+  }
+
+
 
   const requis = (v) => !String(v || "").trim() && "Champ obligatoire.";
   const erreurs = {
@@ -70,7 +97,8 @@ export default function DossierFormSaisie({ options, dossiersExistants, chargePa
     if (!valide) return;
     setEnvoi(true);
     try {
-      await onSubmit({ ...form, hors_habilitation: !!horsHabilitation });
+      const { _version, _source, ...donnees } = form; // eslint-disable-line no-unused-vars
+      await onSubmit({ ...donnees, hors_habilitation: !!horsHabilitation });
       setForm(initial);
       setTente(false);
     } finally {
@@ -83,9 +111,24 @@ export default function DossierFormSaisie({ options, dossiersExistants, chargePa
       {doublonNom && (
         <div className="alert alert-gold" role="alert">
           <Icon name="alert" size={16} className="mt-0.5" />
+          <span className="flex-1">
+            <strong>Doublon :</strong> le dossier « <strong>{doublonNom.nom_dossier}</strong> » existe déjà (saisi le {formatDate(doublonNom.date)}
+            {doublonNom.ingenieur ? `, ${doublonNom.ingenieur}` : ""}
+            {versionsExistantes.length > 1 ? ` · versions ${versionsExistantes.map((n) => `V${n}`).join(", ")}` : ""}).
+            <span className="block mt-1">Voulez-vous faire une autre version de ce dossier ?</span>
+            <button type="button" className="btn-secondary btn-sm mt-2" onClick={faireVersion}>
+              <Icon name="plus" size={14} />
+              Oui, créer la version V{versionSuivante(fam)}
+            </button>
+          </span>
+        </div>
+      )}
+      {nouvelleVersion && (
+        <div className="alert" role="status" style={{ background: "#F8F5FE", borderColor: "#DCD0F5", color: "#5B3FA3" }}>
+          <Icon name="folder" size={16} className="mt-0.5" />
           <span>
-            Un dossier nommé « <strong>{doublonNom.nom_dossier}</strong> » existe déjà (saisi le {formatDate(doublonNom.date)}
-            {doublonNom.ingenieur ? `, ${doublonNom.ingenieur}` : ""}).
+            <strong>Nouvelle version V{numVersion(form.nom_dossier)}</strong> du dossier « {nomBase(form.nom_dossier)} » (déjà : {versionsExistantes.map((n) => `V${n}`).join(", ")}).
+            Elle n'est pas facturée en plus. Vérifie la date de réception de cette version.
           </span>
         </div>
       )}
@@ -102,10 +145,30 @@ export default function DossierFormSaisie({ options, dossiersExistants, chargePa
 
       <Bloc titre="Dossier" icone="folder">
         <Champ label="Nom / n° du dossier" value={form.nom_dossier} onChange={(v) => champ("nom_dossier", v)} required autoFocus erreur={tente ? erreurs.nom_dossier : null} />
-        <Champ label="Date" type="date" value={form.date} onChange={(v) => champ("date", v)} required erreur={tente ? erreurs.date : null} />
+        {nouvelleVersion ? (
+          <div className={`rounded-lg p-2 -m-2 ${dateVue ? "" : "ring-2 ring-[#8B6FD1] bg-[#F8F5FE]"}`}>
+            <Champ label={`Date de réception de la V${numVersion(form.nom_dossier)}`} type="date" value={form.date} onChange={(v) => { champ("date", v); setDateVue(true); }} required erreur={tente ? erreurs.date : null} />
+            {!dateVue && <p className="text-xs font-semibold text-[#5B3FA3] mt-1">À vérifier : date de la nouvelle version (pas celle de la V1).</p>}
+          </div>
+        ) : (
+          <Champ label="Date" type="date" value={form.date} onChange={(v) => champ("date", v)} required erreur={tente ? erreurs.date : null} />
+        )}
         <ChampSelect label="Fiche CEE (opération)" value={form.nom_operation} onChange={(v) => champ("nom_operation", v)} options={options.operations} required erreur={tente ? erreurs.nom_operation : null} />
         <ChampSelect label="Nature" value={form.nature_prod} onChange={(v) => champ("nature_prod", v)} options={options.naturesProd} required erreur={tente ? erreurs.nature_prod : null} />
         <ChampSelect label="Client" value={form.client} onChange={(v) => champ("client", v)} options={options.clients} />
+        {!nouvelleVersion && (
+        <label className="block">
+          <span className="block text-[13px] font-semibold text-ink/70 mb-1.5">Nombre de versions</span>
+          <select className="input w-full" value={form.nb_versions || 1} onChange={(e) => champ("nb_versions", Number(e.target.value))} aria-label="Nombre de versions">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>
+                {n === 1 ? "1 (une seule version)" : `${n} (V1 à V${n})`}
+              </option>
+            ))}
+          </select>
+          <span className="block text-xs text-ink/50 mt-1">Compte pour 1 dossier ; délai de traitement multiplié.</span>
+        </label>
+        )}
       </Bloc>
 
       <Bloc titre="Bénéficiaire" icone="user">

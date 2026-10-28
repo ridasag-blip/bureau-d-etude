@@ -10,14 +10,14 @@ import Avatar from "@/components/ui/Avatar";
 import { useTempsReel, EVT_DOSSIERS } from "@/lib/useTempsReel";
 
 const LINKS = [
-  { href: "/saisie", label: "Saisie", icone: "pencil", roles: ["admin", "qualite"] },
+  { href: "/saisie", label: "Saisie", icone: "pencil", roles: ["admin", "qualite", "lecteur"] },
   { href: "/mes-dossiers", label: "Mes dossiers", icone: "folder", roles: ["ingenieur"] },
-  { href: "/qualite", label: "Qualité", icone: "shield", roles: ["admin", "qualite"] },
-  { href: "/dashboard", label: "Dashboard", icone: "dashboard", roles: ["admin", "qualite"] },
-  { href: "/export", label: "Export", icone: "download", roles: ["admin"], superviseur: true },
-  { href: "/facturation", label: "Facturation", icone: "receipt", roles: ["admin"], superviseur: true },
-  { href: "/erreurs", label: "Erreurs", icone: "alert", roles: ["admin", "qualite", "ingenieur"] },
-  { href: "/messagerie", label: "Messagerie", icone: "message", roles: ["admin", "qualite", "ingenieur"] },
+  { href: "/qualite", label: "Qualité", icone: "shield", roles: ["admin", "qualite", "lecteur"] },
+  { href: "/dashboard", label: "Dashboard", icone: "dashboard", roles: ["admin", "qualite", "lecteur"] },
+  { href: "/export", label: "Export", icone: "download", roles: ["admin", "lecteur"], superviseur: true },
+  { href: "/facturation", label: "Facturation", icone: "receipt", roles: ["admin", "lecteur"], superviseur: true },
+  { href: "/erreurs", label: "Erreurs", icone: "alert", roles: ["admin", "qualite", "ingenieur", "lecteur"] },
+  { href: "/messagerie", label: "Messagerie", icone: "message", roles: ["admin", "qualite", "ingenieur", "lecteur"] },
   { href: "/parametres", label: "Paramètres", icone: "settings", roles: ["admin", "qualite"] },
 ];
 
@@ -33,7 +33,14 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
   const [menuMobile, setMenuMobile] = useState(false);
   const [menuUtilisateur, setMenuUtilisateur] = useState(false);
   const refMenu = useRef(null);
-  const estStaff = ["admin", "qualite"].includes(role);
+  const estStaff = ["admin", "qualite", "lecteur"].includes(role);
+  const lecteur = role === "lecteur";
+
+  // Compte « Visualisation » : la classe « lecture-seule » masque les boutons d'action dans toute l'app
+  useEffect(() => {
+    document.body.classList.toggle("lecture-seule", lecteur);
+    return () => document.body.classList.remove("lecture-seule");
+  }, [lecteur]);
 
   // Pastille « À contrôler » du menu Qualité : rechargée toutes les 20 s, quand une page signale
   // un changement de dossiers, et en direct (Realtime) quand un dossier change dans la base.
@@ -78,7 +85,7 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
 
   // Messages non lus du tchat (rafraîchi toutes les 30 s)
   useEffect(() => {
-    if (!role) return;
+    if (!role || role === "lecteur") return;
     const supabase = createClient();
     let fini = false;
     const maj = async () => {
@@ -96,7 +103,7 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
   // Présence (panneau Équipe de la Messagerie) : signal toutes les minutes, « actif » si l'utilisateur
   // a bougé la souris ou tapé au clavier dans les 5 dernières minutes. L'admin superviseur n'émet rien (côté serveur).
   useEffect(() => {
-    if (!role) return;
+    if (!role || role === "lecteur") return;
     const supabase = createClient();
     let derniereAction = Date.now();
     const bouge = () => (derniereAction = Date.now());
@@ -131,7 +138,7 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
 
   // Export et Facturation : administrateur principal seulement (pas les Responsables)
   const liens = LINKS.filter(
-    (l) => (l.roles.includes(role) || (l.href === "/mes-dossiers" && role === "qualite" && traiteDossiers)) && (!l.superviseur || fonction === "")
+    (l) => (l.roles.includes(role) || (l.href === "/mes-dossiers" && role === "qualite" && traiteDossiers)) && (!l.superviseur || fonction === "" || role === "lecteur")
   );
 
   function lien(l, mobile) {
@@ -180,7 +187,7 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
           <Icon name={menuMobile ? "x" : "menu"} size={20} />
         </button>
 
-        <Link href={role === "ingenieur" ? "/mes-dossiers" : "/saisie"} className="shrink-0 flex items-center">
+        <Link href={role === "ingenieur" ? "/mes-dossiers" : role === "lecteur" ? "/dashboard" : "/saisie"} className="shrink-0 flex items-center">
           <span className="bg-white rounded-lg px-2 py-1 flex items-center">
             <img src="/logo-hillsolution-h.png" alt="Hill Solution" className="h-9 w-auto" />
           </span>
@@ -282,6 +289,11 @@ export default function Navbar({ role, nom, onChangerPersonne, masquerHorloge })
             </div>
           )}
           {liens.map((l) => lien(l, true))}
+        </div>
+      )}
+      {lecteur && (
+        <div className="bg-[#EEE7FB] text-[#5B3FA3] text-center text-[12.5px] font-semibold py-1.5 no-print">
+          Mode visualisation : consultation seulement, aucune modification possible.
         </div>
       )}
     </header>
