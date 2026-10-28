@@ -67,6 +67,8 @@ $$;
 grant execute on function fn_presence_ingenieurs() to authenticated;
 
 -- 6. Annuaire de la messagerie : les comptes Visualisation n'y apparaissent pas
+--    (supprimée puis recréée : sa forme peut différer selon les migrations déjà passées)
+drop function if exists fn_chat_annuaire();
 create or replace function fn_chat_annuaire()
 returns table (id uuid, nom text, role text, fonction text, derniere_activite timestamptz, presence_active boolean, equipes text[], occupe boolean)
 language sql stable security definer set search_path = public as $$
